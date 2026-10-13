@@ -1,0 +1,9 @@
+{
+  "name": "logikablok-tanpa-aset",
+  "version": "0.2.0",
+  "private": true,
+  "description": "LogikaBlok edisi tanpa aset — Blockly -> Python -> engine sendiri, board digambar dengan Canvas. Nol dependensi runtime, nol file gambar/suara.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

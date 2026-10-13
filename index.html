@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LogicBlocky — Edisi Tanpa Aset (vektor)</title>
+<script src="engine.js"></script>
+<script src="lib/blockly.min.js"></script>
+<style>
+ 
+  :root {
+    /* Primitif — biru navy (netral) */
+    --p-navy-950: #0a0e16; --p-navy-900: #10141f; --p-navy-850: #151a26;
+    --p-navy-800: #222a3d; --p-navy-700: #313b54; --p-navy-600: #4a5268;
+    --p-navy-500: #555e75; --p-navy-400: #5b657c; --p-navy-200: #93a0b8;
+    --p-navy-100: #c8d2e4; --p-navy-050: #e8ecf4;
+    /* Primitif — aksen */
+    --p-amber-300: #ffd166; --p-amber-500: #d5803a; --p-amber-ink: #1e2433;
+    --p-green-500: #2f9e5f; --p-green-300: #7ee2a8; --p-green-900: #1f7a45; --p-code: #a8e6a1;
+    --p-red-400: #ff6b6b;
+    --p-blue-500: #3a7bd5; --p-blue-300: #7ab8ff;
+    --p-tile-a: #232a3c; --p-tile-b: #283046;
+    /* Primitif — warna kategori blok (sejajar hue Blockly: robot 160, loop 45, logika 90, matematika 230) */
+    --p-cat-robot: #3aa79d; --p-cat-loop: #e0a23c; --p-cat-logic: #93c447; --p-cat-math: #7a7ff2;
+
+    /* Semantik */
+    --bg: var(--p-navy-850); --surface: var(--p-navy-800); --surface-sunken: var(--p-navy-900);
+    --line: var(--p-navy-700);
+    --ink: var(--p-navy-050); --ink-soft: var(--p-navy-100); --ink-dim: var(--p-navy-200); --ink-faint: var(--p-navy-400);
+    --brand: var(--p-amber-300); --brand-deep: var(--p-amber-500); --on-brand: var(--p-amber-ink);
+    --success: var(--p-green-500); --success-text: var(--p-green-300);
+    --danger: var(--p-red-400);
+    --info: var(--p-blue-500); --info-soft: var(--p-blue-300);
+    --neutral-btn: var(--p-navy-500);
+    --code-fg: var(--p-code);
+    --star-off: var(--p-navy-600);
+    --scrim: rgba(10, 14, 22, .85);
+    --focus-ring: var(--p-blue-300);
+    /* Token board (dibaca juga oleh Canvas via getComputedStyle — satu sumber kebenaran) */
+    --board-tile-a: var(--p-tile-a); --board-tile-b: var(--p-tile-b);
+    --board-wall: #3d4a66; --board-wall-border: #8fa5c8; --board-target: var(--p-green-900);
+    --board-robot: var(--p-amber-300); --board-robot-crash: var(--p-red-400);
+    --board-bg: var(--p-navy-900);
+
+    /* Ukuran */
+    --sp-xs: 6px; --sp-sm: 8px; --sp-md: 12px; --sp-lg: 16px; --sp-xl: 22px;
+    --r-sm: 10px; --r-md: 12px; --r-lg: 14px; --r-xl: 18px;
+    --fs-xs: 11.5px; --fs-sm: 13px; --fs-md: 14px; --fs-lg: 15px; --fs-xl: 22px;
+    --font-ui: 'Segoe UI', system-ui, Arial, sans-serif;
+    --font-mono: Consolas, 'Courier New', monospace;
+    --shadow-card: 0 2px 10px rgba(5, 8, 14, .35);
+    --t-fast: 120ms ease;
+    --z-overlay: 99999;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-ui); }
+  body { background: var(--bg); color: var(--ink); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 18px; }
+  
+  /* Header & Branding Game */
+  .game-header { width: 100%; max-width: 1250px; display: flex; flex-direction: column; align-items: center; margin-bottom: 12px; }
+  .brand-title { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; }
+  h1 { font-size: 26px; font-weight: 800; letter-spacing: .8px; margin: 0; }
+  h1 span { color: var(--brand); text-shadow: 0 0 12px rgba(255, 209, 102, 0.35); }
+  .tag-curriculum { background: rgba(58, 123, 213, 0.2); color: var(--p-blue-300); border: 1px solid rgba(58, 123, 213, 0.4); padding: 3px 12px; border-radius: 20px; font-size: 11.5px; font-weight: 600; letter-spacing: .4px; }
+  .sub { color: var(--ink-dim); font-size: 13px; max-width: 720px; margin: 0 auto; line-height: 1.4; text-align: center; }
+  
+  /* Navigasi Level */
+  .lvlbar { display: flex; gap: 10px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+  .lbtn { background: var(--surface); border: 1px solid var(--line); color: var(--ink-soft); border-radius: 24px; padding: 7px 22px; cursor: pointer; font-size: 13.5px; font-weight: 600; transition: all var(--t-fast); box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
+  .lbtn:hover { filter: brightness(1.15); border-color: var(--brand); color: var(--ink); transform: translateY(-1px); }
+  .lbtn.dipilih { background: linear-gradient(135deg, var(--brand), var(--brand-deep)); color: var(--on-brand); font-weight: 700; border-color: var(--brand); box-shadow: 0 0 14px rgba(255, 209, 102, 0.4); }
+
+  /* Dashboard HUD Metrik Edukasi */
+  .hud { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; width: 100%; max-width: 1250px; margin-bottom: 14px; background: transparent; border: none; padding: 0; box-shadow: none; }
+  @media (max-width: 960px) { .hud { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 520px) { .hud { grid-template-columns: 1fr; } }
+  
+  .hud-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px 14px; display: flex; flex-direction: column; justify-content: center; box-shadow: var(--shadow-card); min-height: 72px; transition: border-color var(--t-fast); }
+  .hud-card:hover { border-color: rgba(255,255,255,0.18); }
+  .hud-card.highlight { border-color: rgba(255, 209, 102, 0.4); background: linear-gradient(180deg, var(--surface), rgba(34, 42, 61, 0.95)); }
+  .hud-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink-dim); font-weight: 600; margin-bottom: 3px; }
+  .hud-val { font-size: 15.5px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hud-sub { font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
+  
+  /* Skor & Predikat KKTP */
+  .score-val { color: var(--brand); font-size: 18px; }
+  .score-max { font-size: 12px; color: var(--ink-dim); font-weight: normal; margin-left: 2px; }
+  .grade-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; }
+  .grade-waiting { background: rgba(91, 101, 124, 0.25); color: var(--ink-dim); border: 1px solid var(--line); }
+  .grade-mahir { background: rgba(47, 158, 95, 0.25); color: var(--success-text); border: 1px solid var(--success); }
+  .grade-cakap { background: rgba(58, 123, 213, 0.25); color: var(--info-soft); border: 1px solid var(--info); }
+  .grade-dasar { background: rgba(213, 128, 58, 0.25); color: var(--brand); border: 1px solid var(--brand); }
+  .grade-bimbingan { background: rgba(255, 107, 107, 0.25); color: var(--danger); border: 1px solid var(--danger); }
+  
+  .status-val { font-size: 14.5px; color: var(--p-blue-300); }
+  #bonus.on { color: var(--brand); font-weight: 600; }
+  .quota-over { color: var(--danger) !important; font-weight: bold; }
+  .star { color: var(--star-off); font-size: 21px; }
+  .star.on { color: var(--brand); }
+
+  /* Tata Letak Utama Adaptif Multi-Device */
+  .main {
+    display: grid;
+    grid-template-columns: 370px minmax(420px, 1fr) 320px;
+    gap: 16px;
+    width: 100%;
+    max-width: 1250px;
+    align-items: start;
+    box-sizing: border-box;
+  }
+
+  /* Desktop Layar Lebar (>= 1400px) */
+  @media (min-width: 1400px) {
+    .main {
+      grid-template-columns: 390px minmax(500px, 1fr) 340px;
+      max-width: 1380px;
+      gap: 20px;
+    }
+    #blocklyDiv { height: 560px; }
+  }
+
+  /* Laptop Standar & Layar Menengah-Tinggi (1024px - 1240px) */
+  @media (max-width: 1240px) and (min-width: 1024px) {
+    .main {
+      grid-template-columns: 340px minmax(360px, 1fr) 290px;
+      gap: 12px;
+    }
+    #blocklyDiv { height: 500px; }
+    #code { height: 410px; }
+  }
+
+  /* Tablet Landscape & Layar Sedang (768px - 1023px) */
+  @media (max-width: 1023px) and (min-width: 768px) {
+    .main {
+      grid-template-columns: 340px 1fr;
+      gap: 14px;
+    }
+    .main > .col:nth-child(3) {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    #blocklyDiv { height: 480px; }
+  }
+
+  /* Tablet Portrait & Ponsel Lebar (576px - 767px) */
+  @media (max-width: 767px) {
+    body { padding: 12px 10px; }
+    .main {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      width: 100%;
+    }
+    .main > .col {
+      width: 100%;
+      min-width: 0;
+    }
+    #blocklyDiv { height: 440px; }
+    #code { height: 340px; }
+  }
+
+  /* Ponsel Standar & Layar Sempit (< 576px) */
+  @media (max-width: 575px) {
+    body { padding: 8px 6px; }
+    h1 { font-size: 20px; }
+    .sub { font-size: 11.5px; line-height: 1.35; }
+    .lbtn { padding: 6px 14px; font-size: 12px; }
+    .hud {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .hud-card {
+      min-height: 56px;
+      padding: 8px 12px;
+    }
+    .hud-val { font-size: 14px; }
+    #blocklyDiv { height: 390px; }
+    #code { height: 290px; }
+    .controls { gap: 6px; }
+    .cbtn { padding: 8px 4px; font-size: 12.5px; }
+    .speedrow { flex-wrap: wrap; }
+    .box { padding: 10px 12px; }
+  }
+
+  .col { display: flex; flex-direction: column; gap: var(--sp-md); min-width: 0; }
+  .box { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: var(--sp-md) 14px; font-size: 13.5px; box-shadow: var(--shadow-card); }
+  .box h3 { font-size: var(--fs-xs); color: var(--ink-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 7px; }
+  .mission { color: var(--ink-soft); line-height: 1.5; }
+  /* Papan vektor responsif: menyesuaikan ukuran kontainer tanpa overflow */
+  #board { display: block; margin: 0 auto; background: var(--board-bg); border-radius: var(--r-md); padding: var(--sp-sm); max-width: 100%; height: auto; box-sizing: border-box; }
+  #blocklyDiv { width: 100%; height: 520px; border-radius: var(--r-lg); overflow: hidden; background: var(--board-bg); }
+  #codeWrap { display: none; flex-direction: column; gap: var(--sp-md); }
+  .codelabel { color: var(--ink-dim); font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: 1px; }
+  #code { width: 100%; height: 430px; background: var(--surface-sunken); color: var(--code-fg); border: 1px solid var(--line); border-radius: var(--r-lg); padding: var(--sp-md) 14px; font-family: var(--font-mono); font-size: 14.5px; resize: vertical; line-height: 1.55; tab-size: 4; }
+  #code:focus { outline: 2px solid var(--info); }
+  #code::placeholder { color: var(--ink-faint); }
+  #btnHint { background: var(--brand-deep); color: var(--ink); border: none; border-radius: var(--r-sm); padding: 9px 16px; font-size: 13.5px; cursor: pointer; align-self: flex-start; transition: filter var(--t-fast); }
+  #btnHint:hover:not(:disabled) { filter: brightness(1.12); }
+  #btnHint:disabled { opacity: .45; cursor: not-allowed; }
+  #hintBox { color: var(--brand); font-size: var(--fs-sm); white-space: pre-wrap; line-height: 1.55; }
+  .refdoc { background: var(--surface-sunken); border-radius: var(--r-sm); padding: 10px 12px; font-family: var(--font-mono); font-size: 12.5px; color: var(--code-fg); white-space: pre; overflow-x: auto; line-height: 1.6; }
+  .refdoc .rk { color: var(--info-soft); }
+  #pycode { background: var(--surface-sunken); color: var(--code-fg); border-radius: var(--r-sm); padding: 10px 12px; font-family: var(--font-mono); font-size: var(--fs-sm); white-space: pre; min-height: 24px; overflow-x: auto; line-height: 1.55; }
+  .controls { display: flex; gap: var(--sp-sm); }
+  .cbtn { flex: 1; border: none; border-radius: var(--r-sm); padding: 10px; font-size: var(--fs-md); cursor: pointer; font-weight: 600; color: var(--ink); transition: filter var(--t-fast); }
+  .cbtn:hover:not(:disabled) { filter: brightness(1.12); }
+  .c-run { background: var(--success); } .c-step { background: var(--info); } .c-reset { background: var(--neutral-btn); }
+  .cbtn:disabled { opacity: .4; cursor: not-allowed; }
+  #msg.err { color: var(--danger); } #msg.ok { color: var(--success-text); }
+  #msg { min-height: 22px; line-height: 1.5; }
+  #msg:empty { display: none; } /* kotak pesan tidak memakan tempat saat kosong */
+  button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  /* Warna label toolbox datang dari tema Blockly (toolboxForegroundColour) — jangan di-override. */
+  .blocklyTreeLabel { font-size: var(--fs-md) !important; }
+  /* Baris kategori terpilih memakai warna kategori sebagai latar: pakai tinta gelap. */
+  .blocklyTreeSelected .blocklyTreeLabel { color: var(--p-navy-950) !important; }
+  /* ===== EDISI TANPA ASET: netralkan semua aturan CSS Blockly yang merujuk file =====
+     Tanpa ini browser akan meminta sprite toolbox dan file kursor dari folder media. */
+  .blocklyTreeIcon { background-image: none !important; display: none !important; }
+  .blocklyToolboxDelete, .blocklyDragging.blocklyDraggingDelete,
+  .blocklyToolboxDelete .blocklyTreeLabel { cursor: not-allowed !important; }
+  .blocklyToolboxGrab { cursor: grabbing !important; }
+  .blocklyMenuItemSelected .blocklyMenuItemCheckbox { background: none !important; }
+  #overlay { display: none; position: fixed; inset: 0; background: var(--scrim); align-items: center; justify-content: center; z-index: var(--z-overlay); }
+  #overlay .card { background: var(--surface); border: 1px solid var(--line); padding: 30px 38px; border-radius: var(--r-xl); text-align: center; max-width: 420px; box-shadow: var(--shadow-card); }
+  #overlay .big { font-size: 40px; }
+  #overlay p { margin: 10px 0 var(--sp-lg); color: var(--ink-soft); font-size: var(--fs-md); line-height: 1.5; }
+  #overlay button { background: var(--success); color: var(--ink); border: none; border-radius: var(--r-sm); padding: 10px 22px; font-size: var(--fs-md); cursor: pointer; margin: 0 4px; transition: filter var(--t-fast); }
+  #overlay button:hover { filter: brightness(1.12); }
+</style>
+</head>
+<body>
+<header class="game-header">
+  <div class="brand-title">
+    <h1>BitBot <span>Escape</span></h1>
+    <span class="tag-curriculum">SMK Fase E • Berpikir Komputasional</span>
+  </div>
+  <p class="sub">Media pembelajaran logika algoritma &amp; komputasi robotik. Susun blok visual atau kode Python dengan solusi paling efisien dan tepat.</p>
+  <div class="lvlbar" id="lvlbar"></div>
+</header>
+
+<div class="hud">
+  <div class="hud-card">
+    <div class="hud-label">Misi &amp; Tingkat</div>
+    <div class="hud-val" id="lvlname">Level 1: Urutan Perintah</div>
+    <div class="hud-sub" id="varian">Peta uji 1/1</div>
+  </div>
+
+  <div class="hud-card">
+    <div class="hud-label">Efisiensi Algoritma</div>
+    <div class="hud-val" id="quota">0 / 9 pernyataan</div>
+    <div class="hud-sub" id="quota-hint">Optimal ≤ 9 pernyataan</div>
+  </div>
+
+  <div class="hud-card highlight">
+    <div class="hud-label">Skor Berpikir Komputasional</div>
+    <div class="hud-val score-val"><span id="hudScoreVal">—</span><span class="score-max">/100</span></div>
+    <div class="hud-sub"><span id="hudBadge" class="grade-badge grade-waiting">Belum Diuji</span></div>
+  </div>
+
+  <div class="hud-card">
+    <div class="hud-label">Status Eksekusi</div>
+    <div class="hud-val status-val" id="aktif">Siap Dijalankan</div>
+    <div class="hud-sub" id="bonus">⚡ bonus ≤ 9 langkah</div>
+  </div>
+
+  <!-- Elemen kompatibilitas uji bawaan -->
+  <div style="display:none;" aria-hidden="true">
+    <span class="star" id="s1">★</span><span class="star" id="s2">★</span><span class="star" id="s3">★</span>
+  </div>
+</div>
+<main class="main">
+  <div class="col">
+    <div class="box" style="padding:8px"><canvas id="board" width="360" height="360" role="img" aria-label="Peta level"></canvas></div>
+    <div class="controls">
+      <button class="cbtn c-run" id="btnRun">&gt; Jalankan</button>
+      <button class="cbtn c-step" id="btnStep">&gt;| Langkah</button>
+      <button class="cbtn c-reset" id="btnReset">Reset</button>
+    </div>
+    <div class="box speedrow">
+      <label for="speed">Kecepatan</label>
+      <select id="speed">
+        <option value="380">1x</option>
+        <option value="190">2x</option>
+        <option value="95">4x</option>
+        <option value="0">Langsung</option>
+      </select>
+      <button class="cbtn c-end" id="btnEnd">Ke akhir</button>
+    </div>
+    <div class="box" id="msg" aria-live="polite"></div>
+  </div>
+  <div class="col">
+    <div id="blocklyDiv"></div>
+    <div id="codeWrap">
+      <label for="code" class="codelabel">Kode Python (editor)</label>
+      <textarea id="code" spellcheck="false" placeholder="# Tulis kode Python-mu di sini"></textarea>
+      <div class="box">
+        <h3>Referensi Perintah</h3>
+        <div class="refdoc"><span class="rk">Perintah</span> : robot.forward(), robot.turn_left(), robot.turn_right(), robot.take()
+<span class="rk">Kondisi</span>&nbsp; : robot.wall_ahead(), robot.wall_left(), robot.wall_right(),
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; robot.item_ahead(), robot.at_goal()  (boleh diawali 'not ')
+<span class="rk">Loop</span>&nbsp;&nbsp;&nbsp; : for i in range(banyak):
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; lalu baris berikutnya menjorok 4 spasi
+<span class="rk">Selama</span>&nbsp;&nbsp; : while robot.wall_ahead():   (hati-hati: bisa tak berujung!)
+<span class="rk">Pilihan</span>&nbsp;&nbsp; : if robot.item_ahead(): ...
+<span class="rk">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span> else: ...
+<span class="rk">Fungsi</span>&nbsp;&nbsp; : def nama(): ...  lalu panggil  nama()   (maks 3, tanpa rekursi)
+<span class="rk">Komentar</span> : awali baris dengan #  (tidak dihitung)</div>
+      </div>
+      <div class="box">
+        <button id="btnHint">💡 Petunjuk (0/3)</button>
+        <div id="hintBox"></div>
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="box"><h3>Misi</h3><div class="mission" id="mission"></div></div>
+    <div class="box" id="pybox"><h3>Kode Python hasil terjemahan</h3><div id="pycode"></div></div>
+  </div>
+</main>
+<div id="overlay" role="dialog" aria-modal="true" aria-labelledby="ovTitle" aria-describedby="ovText">
+  <div class="card">
+  <div class="big" id="ovIcon"></div>
+  <h2 id="ovTitle"></h2>
+  <p id="ovText"></p>
+  <button id="ovRetry">Coba Lagi</button>
+  <button id="ovNext">Lanjut →</button>
+</div></div>
+
+<script>
+'use strict';
+// Engine murni ada di engine.js (LBEngine). File ini hanya: UI, Blockly, generator blok->Python, Canvas.
+// CATATAN: nama global dari engine.js (LEVELS, ERR, compilePython, countStatements, evaluateProgram,
+// varian, STEP_CAP, DIRS, ...) dipakai langsung di sini — tidak boleh dideklarasikan ulang.
+const EN = LBEngine;
+
+// Tema Canvas dibaca dari CSS custom properties — satu sumber kebenaran dengan stylesheet.
+// Warna kategori blok diambil dari TEMA (engine.js) supaya tema Blockly & blok pakai nilai yang sama.
+const THEME = (() => {
+  const cs = getComputedStyle(document.documentElement);
+
+  // Ambil nilai satu CSS custom property.
+  const v = k => cs.getPropertyValue(k).trim();
+
+  return { bg: v("--board-bg"), tileA: v("--board-tile-a"), tileB: v("--board-tile-b"),
+           wall: v("--board-wall"), wallBorder: v("--board-wall-border") || "#8fa5c8",
+           target: v("--board-target"), robot: v("--board-robot"),
+           robotCrash: v("--board-robot-crash"), robotDark: v("--p-amber-500"),
+           ink: v("--p-navy-950"), line: v("--p-navy-700"),
+           catRobot: TEMA.catRobot, catLoop: TEMA.catLoop,
+           catLogic: TEMA.catLogic, catMath: TEMA.catMath };
+})();
+
+// Tema Blockly: workspace gelap + label toolbox kontras (TEMA diuji rasio kontrasnya di Node).
+const TEMA_BLOCKLY = Blockly.Theme.defineTheme("logikablok", {
+  base: Blockly.Themes.Classic,
+  componentStyles: {
+    workspaceBackgroundColour: TEMA.workspaceBg,
+    toolboxBackgroundColour: TEMA.toolboxBg,
+    toolboxForegroundColour: TEMA.toolboxFg,
+    flyoutBackgroundColour: TEMA.flyoutBg,
+    flyoutForegroundColour: TEMA.flyoutBg,
+    flyoutOpacity: 1,
+    scrollbarColour: TEMA.scrollbar,
+    scrollbarOpacity: 0.75,
+    insertionMarkerColour: TEMA.marker,
+    insertionMarkerOpacity: 0.4,
+    cursorColour: TEMA.cursor,
+    markerColour: TEMA.marker
+  }
+});
+
+// ============ GAMBAR BOARD — SEMUA VEKTOR, TANPA FILE ASET ============
+// Setiap petak digambar dari token warna saja, jadi board tetap "bengkel robot malam"
+// walau folder gambar dan folder media Blockly tidak ada sama sekali.
+// Isi persegi panjang dengan satu warna.
+function kotak(ctx, warna, x, y, w, h) { ctx.fillStyle = warna; ctx.fillRect(x, y, w, h); }
+
+// Jalankan fn dengan warna dan tebal garis tertentu, lalu pulihkan state.
+function garis(ctx, warna, tebal, fn) { ctx.save(); ctx.strokeStyle = warna; ctx.lineWidth = tebal; fn(); ctx.restore(); }
+
+// Isi lingkaran berpusat di (x, y) dengan radius r.
+function bulat(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+
+// Gambar satu petak lantai (pelat baja dengan baut).
+function gambarLantai(ctx, px, py, c, selang) {
+  kotak(ctx, selang ? THEME.tileA : THEME.tileB, px, py, c, c);
+  // pelat baja: nat gelap + sorotan tipis di tepi atas-kiri
+  garis(ctx, "rgba(0,0,0,.30)", 1, () => ctx.strokeRect(px + .5, py + .5, c - 1, c - 1));
+  garis(ctx, "rgba(255,255,255,.05)", 1, () => {
+    ctx.beginPath(); ctx.moveTo(px + 1.5, py + c - 1.5); ctx.lineTo(px + 1.5, py + 1.5);
+    ctx.lineTo(px + c - 1.5, py + 1.5); ctx.stroke();
+  });
+  // empat baut di sudut pelat
+  ctx.fillStyle = "rgba(255,255,255,.12)";
+  const r = Math.max(1, c * .045), m = c * .17;
+  [[m, m], [c - m, m], [m, c - m], [c - m, c - m]].forEach(o => bulat(ctx, px + o[0], py + o[1], r));
+}
+
+// Gambar satu petak dinding bata dengan border mencolok.
+function gambarDinding(ctx, px, py, c) {
+  kotak(ctx, THEME.wall, px, py, c, c);
+  kotak(ctx, "rgba(255,255,255,.22)", px, py, c, Math.max(2, c * .12));     // puncak bata cerah
+  kotak(ctx, "rgba(0,0,0,.35)", px, py + c - Math.max(2, c * .1), c, Math.max(2, c * .1));
+  // susunan bata 3 baris, sambungan berselang-seling
+  garis(ctx, "rgba(0,0,0,.45)", 1, () => {
+    ctx.beginPath();
+    for (let i = 1; i < 3; i++) { ctx.moveTo(px, py + c * i / 3 + .5); ctx.lineTo(px + c, py + c * i / 3 + .5); }
+    ctx.moveTo(px + c * .5, py + .5); ctx.lineTo(px + c * .5, py + c / 3);
+    ctx.moveTo(px + c * .25, py + c / 3); ctx.lineTo(px + c * .25, py + c * 2 / 3);
+    ctx.moveTo(px + c * .75, py + c / 3); ctx.lineTo(px + c * .75, py + c * 2 / 3);
+    ctx.moveTo(px + c * .5, py + c * 2 / 3); ctx.lineTo(px + c * .5, py + c);
+    ctx.stroke();
+  });
+  // border luar tebal dan mencolok sebagai pembatas rintangan
+  garis(ctx, THEME.wallBorder, 2, () => ctx.strokeRect(px + 1, py + 1, c - 2, c - 2));
+}
+
+// Gambar pad tujuan beserta paketnya.
+function gambarTujuan(ctx, px, py, c) {
+  // bantalan pendaratan hijau bergaris putus-putus
+  kotak(ctx, THEME.target, px + c * .05, py + c * .05, c * .9, c * .9);
+  garis(ctx, "rgba(126,226,168,.8)", Math.max(1.5, c * .03), () => {
+    ctx.setLineDash([Math.max(2, c * .09), Math.max(2, c * .07)]);
+    ctx.strokeRect(px + c * .14, py + c * .14, c * .72, c * .72);
+    ctx.setLineDash([]);
+  });
+  // paket: kotak kardus dengan selotip salib
+  const s = c * .44, bx = px + (c - s) / 2, by = py + (c - s) / 2;
+  kotak(ctx, "#b5793a", bx, by, s, s);
+  kotak(ctx, "#8c5a2a", bx, by + s * .42, s, s * .16);
+  kotak(ctx, "#d5803a", bx + s * .42, by, s * .16, s);
+  garis(ctx, "rgba(0,0,0,.4)", 1, () => ctx.strokeRect(bx + .5, by + .5, s - 1, s - 1));
+}
+
+// Gambar item berbentuk roda gigi.
+function gambarItem(ctx, px, py, c) {
+  // roda gigi: 8 gigi + badan + lubang tengah
+  const cx = px + c / 2, cy = py + c / 2, rBesar = c * .3, rKecil = c * .21;
+  ctx.save(); ctx.translate(cx, cy);
+  ctx.fillStyle = THEME.robot;
+  for (let i = 0; i < 8; i++) {
+    ctx.save(); ctx.rotate(i * Math.PI / 4);
+    ctx.fillRect(-c * .055, -rBesar, c * .11, c * .1);
+    ctx.restore();
+  }
+  bulat(ctx, 0, 0, rKecil);
+  ctx.fillStyle = THEME.bg; bulat(ctx, 0, 0, c * .075);
+  ctx.restore();
+  garis(ctx, "rgba(0,0,0,.35)", 1, () => { ctx.beginPath(); ctx.arc(cx, cy, rKecil, 0, Math.PI * 2); ctx.stroke(); });
+}
+
+// Gambar robot menghadap arah dir; merah bila menabrak.
+function gambarRobot(ctx, cx, cy, c, dir, bad) {
+  const badan = bad ? THEME.robotCrash : THEME.robot, gelap = bad ? "#8f2f2f" : THEME.robotDark;
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(dir * Math.PI / 2);
+  const s = c * .74, x = -s / 2, y = -s / 2;
+  // roda/rantai di kiri-kanan
+  kotak(ctx, gelap, x - s * .1, y + s * .18, s * .12, s * .64);
+  kotak(ctx, gelap, x + s * .98, y + s * .18, s * .12, s * .64);
+  // badan
+  ctx.fillStyle = badan;
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, s, s * .9, s * .22); ctx.fill(); }
+  else ctx.fillRect(x, y, s, s * .9);
+  garis(ctx, "rgba(0,0,0,.35)", 1, () => { ctx.beginPath(); ctx.rect(x + .5, y + .5, s - 1, s * .9 - 1); ctx.stroke(); });
+  // panel muka + dua mata (muka menghadap ke atas pada koordinat lokal)
+  kotak(ctx, THEME.ink, x + s * .16, y + s * .12, s * .68, s * .3);
+  ctx.fillStyle = bad ? "#ffecec" : "#7ee2a8";
+  bulat(ctx, x + s * .34, y + s * .27, s * .07);
+  bulat(ctx, x + s * .66, y + s * .27, s * .07);
+  // antena
+  garis(ctx, gelap, Math.max(1.5, s * .06), () => {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(0, y - s * .16); ctx.stroke();
+  });
+  ctx.fillStyle = gelap; bulat(ctx, 0, y - s * .19, s * .07);
+  // penanda arah hadap (hidung) supaya arah robot selalu jelas
+  ctx.fillStyle = badan;
+  ctx.beginPath(); ctx.moveTo(0, y - s * .30); ctx.lineTo(s * .13, y - s * .12); ctx.lineTo(-s * .13, y - s * .12);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+// ============ DEFINISI BLOK ============
+// Nilai dropdown = potongan Python; awalan "not " menghasilkan 'not robot.x()'.
+const SENSOR_OPTS = [
+  ["ada dinding di depan", "wall_ahead"],
+  ["tidak ada dinding di depan", "not wall_ahead"],
+  ["ada dinding di kiri", "wall_left"],
+  ["ada dinding di kanan", "wall_right"],
+  ["ada item di depan", "item_ahead"],
+  ["tidak ada item di depan", "not item_ahead"],
+  ["robot sudah di petak tujuan", "at_goal"],
+  ["robot belum di petak tujuan", "not at_goal"]
+];
+Blockly.defineBlocksWithJsonArray([
+  { type: "lb_fwd", message0: "maju", previousStatement: null, nextStatement: null, colour: THEME.catRobot },
+  { type: "lb_left", message0: "belok kiri", previousStatement: null, nextStatement: null, colour: THEME.catRobot },
+  { type: "lb_right", message0: "belok kanan", previousStatement: null, nextStatement: null, colour: THEME.catRobot },
+  { type: "lb_take", message0: "ambil item di depan", previousStatement: null, nextStatement: null, colour: THEME.catRobot },
+  { type: "lb_repeat", message0: "ulangi %1 kali", message1: "%1",
+    args0: [ { type: "input_value", name: "TIMES", check: "Number" } ],
+    args1: [ { type: "input_statement", name: "DO" } ],
+    previousStatement: null, nextStatement: null, colour: THEME.catLoop },
+  { type: "lb_while", message0: "ulangi selama %1 :", message1: "%1",
+    args0: [ { type: "field_dropdown", name: "SENSOR", options: SENSOR_OPTS } ],
+    args1: [ { type: "input_statement", name: "DO" } ],
+    previousStatement: null, nextStatement: null, colour: THEME.catLoop },
+  { type: "lb_if", message0: "jika %1 :", message1: "%1",
+    args0: [ { type: "field_dropdown", name: "SENSOR", options: SENSOR_OPTS } ],
+    args1: [ { type: "input_statement", name: "DO" } ],
+    previousStatement: null, nextStatement: null, colour: THEME.catLogic },
+  { type: "lb_ifelse", message0: "jika %1 :", message1: "%1", message2: "selain itu :", message3: "%1",
+    args0: [ { type: "field_dropdown", name: "SENSOR", options: SENSOR_OPTS } ],
+    args1: [ { type: "input_statement", name: "DO" } ],
+    args3: [ { type: "input_statement", name: "ELSE" } ],
+    previousStatement: null, nextStatement: null, colour: THEME.catLogic },
+  { type: "lb_def", message0: "buat fungsi %1 :", message1: "%1",
+    args0: [ { type: "field_input", name: "NAME", text: "langkah" } ],
+    args1: [ { type: "input_statement", name: "STACK" } ],
+    previousStatement: null, nextStatement: null, colour: THEME.catMath, extensions: ["lb_nama_fungsi"] },
+  { type: "lb_call", message0: "jalankan fungsi %1",
+    args0: [ { type: "field_input", name: "NAME", text: "langkah" } ],
+    previousStatement: null, nextStatement: null, colour: THEME.catMath, extensions: ["lb_nama_fungsi"] }
+]);
+
+// Nama fungsi dibersihkan: huruf kecil, spasi jadi underscore, karakter tak sah dibuang.
+// Menghasilkan null bila tidak bisa dipakai sebagai nama Python (kosong / awalan angka).
+function namaFungsi(asal) {
+  const bersih = String(asal == null ? "" : asal).toLowerCase()
+    .replace(/[\s\-]+/g, "_").replace(/[^a-z0-9_]/g, "").replace(/_+/g, "_").replace(/^_|_$/g, "");
+  return /^[a-z][a-z0-9_]*$/.test(bersih) ? bersih : null;
+}
+
+// Validator field: kembalikan null untuk menolak (Blockly v11: undefined justru menerima nilai mentah).
+Blockly.Extensions.register("lb_nama_fungsi", function () {
+  const f = this.getField("NAME");
+  if (f) f.setValidator(v => { const h = namaFungsi(v); return h === null ? null : h; });
+});
+
+// ============ GENERATOR BLOK -> PYTHON (+ pemetaan baris -> id blok untuk sorotan) ============
+// Ubah nilai dropdown sensor menjadi kondisi Python.
+function kondisiBlok(b) {
+  const v = String(b.getFieldValue("SENSOR"));
+  return v.indexOf("not ") === 0 ? "not robot." + v.slice(4) + "()" : "robot." + v + "()";
+}
+
+// Ubah blok di workspace menjadi kode Python + peta baris -> id blok.
+function blocksToPython(workspace) {
+  const baris = [], lineMap = {};
+
+  // Tambah satu baris kode dan catat id bloknya.
+  const out = (teks, b) => { baris.push(teks); lineMap[baris.length] = b.id; };
+
+  // Cetak rangkaian blok (beserta isinya) sebagai baris Python.
+  function emit(block, indent) {
+    let b = block;
+    while (b) {
+      const t = b.type;
+      if (t === "lb_fwd") out(indent + "robot.forward()", b);
+      else if (t === "lb_left") out(indent + "robot.turn_left()", b);
+      else if (t === "lb_right") out(indent + "robot.turn_right()", b);
+      else if (t === "lb_take") out(indent + "robot.take()", b);
+      else if (t === "lb_repeat") {
+        const numB = b.getInputTargetBlock("TIMES");
+        const raw = numB ? String(numB.getFieldValue("NUM")).trim() : "";
+        if (!/^\d+$/.test(raw))
+          throw { line: baris.length + 1, pesan: "Slot angka pada blok 'ulangi' masih kosong — isi dengan blok angka (bilangan bulat ≥ 0)!" };
+        out(indent + "for i in range(" + raw + "):", b);
+        const body = b.getInputTargetBlock("DO");
+        if (body) emit(body, indent + "    ");
+      }
+      else if (t === "lb_if" || t === "lb_while") {
+        out(indent + (t === "lb_if" ? "if " : "while ") + kondisiBlok(b) + ":", b);
+        const body = b.getInputTargetBlock("DO");
+        if (body) emit(body, indent + "    ");
+      }
+      else if (t === "lb_ifelse") {
+        out(indent + "if " + kondisiBlok(b) + ":", b);
+        const body = b.getInputTargetBlock("DO");
+        if (body) emit(body, indent + "    ");
+        out(indent + "else:", b);
+        const els = b.getInputTargetBlock("ELSE");
+        if (els) emit(els, indent + "    ");
+      }
+      else if (t === "lb_def") {
+        out(indent + "def " + (namaFungsi(b.getFieldValue("NAME")) || "fungsi") + "():", b);
+        const body = b.getInputTargetBlock("STACK");
+        if (body) emit(body, indent + "    ");
+      }
+      else if (t === "lb_call") out(indent + (namaFungsi(b.getFieldValue("NAME")) || "fungsi") + "()", b);
+      b = b.getNextBlock();
+    }
+  }
+
+  const tops = workspace.getTopBlocks(true);
+  const defs = tops.filter(b => b.type === "lb_def");
+  // Hanya blok pernyataan yang bisa memulai program; blok nilai (angka) tidak dihitung.
+  const program = tops.filter(b => b.type !== "lb_def" && b.previousConnection);
+  // Tumpukan def dicetak lebih dulu supaya pemanggilan di bawahnya dikenal parser.
+  defs.forEach(tb => emit(tb, ""));
+  program.forEach(tb => emit(tb, ""));
+  return { code: baris.length ? baris.join("\n") + "\n" : "", lineMap: lineMap, program: program };
+}
+
+// ============ TOOLBOX dari kategori level ============
+// Slot angka 'ulangi' diisi lewat shadow math_number pada properti `inputs` di toolbox,
+// supaya blok yang lahir dari flyout sudah membawa angka (bukan diam-diam range(1)).
+const KAT = {
+  robot: () => ({ kind: "category", name: "Robot", colour: THEME.catRobot, contents:
+    [{ kind: "block", type: "lb_fwd" }, { kind: "block", type: "lb_left" },
+     { kind: "block", type: "lb_right" }, { kind: "block", type: "lb_take" }] }),
+  loop: () => ({ kind: "category", name: "Perulangan", colour: THEME.catLoop, contents:
+    [{ kind: "block", type: "lb_repeat", inputs: { TIMES: { shadow: { type: "math_number", fields: { NUM: 3 } } } } }] }),
+  loop_lanjut: () => ({ kind: "category", name: "Perulangan Lanjut", colour: THEME.catLoop, contents:
+    [{ kind: "block", type: "lb_repeat", inputs: { TIMES: { shadow: { type: "math_number", fields: { NUM: 3 } } } } },
+     { kind: "block", type: "lb_while" }] }),
+  logika: () => ({ kind: "category", name: "Logika", colour: THEME.catLogic, contents:
+    [{ kind: "block", type: "lb_if" }, { kind: "block", type: "lb_ifelse" }] }),
+  fungsi: () => ({ kind: "category", name: "Fungsi", colour: THEME.catMath, contents:
+    [{ kind: "block", type: "lb_def" }, { kind: "block", type: "lb_call" }] }),
+  matematika: () => ({ kind: "category", name: "Matematika", colour: THEME.catMath, contents:
+    [{ kind: "block", type: "math_number" }] })
+};
+
+// Bangun isi toolbox dari kategori yang dipakai level.
+function toolboxDari(level) { return (level.kategori || []).map(k => KAT[k] && KAT[k]()).filter(Boolean); }
+
+// ============ STATE UI ============
+let lvlIdx = 0, ws = null, hasil = null, trace = null, traceIdx = 0, running = false, timer = null,
+    finished = false, hintsShown = 0, petaIdx = 0, lineMap = {}, rob = null, currentItems = [], yatim = [];
+
+// Level yang sedang aktif.
+function L() { return LEVELS[lvlIdx]; }
+
+// Peta uji yang sedang ditampilkan.
+function petaAktif() { return varian(L())[petaIdx] || varian(L())[0]; }
+
+// Jumlah peta uji di level aktif.
+function jumlahVarian() { return varian(L()).length; }
+
+// Ambil kode dari editor teks atau dari blok sesuai mode level.
+function sumberKode() {
+  return L().mode === "code" ? { code: document.getElementById("code").value, lineMap: {} } : blocksToPython(ws);
+}
+
+// Metrik seragam untuk kedua mode: jumlah pernyataan dari AST.
+// Fallback ke hitungan mentah hanya saat program belum valid (siswa sedang menulis).
+function biayaSaatIni() {
+  let code;
+  try { code = sumberKode().code; } catch (e) { return hitungMentah(); }
+  if (!code.trim()) return 0;
+  try { return countStatements(compilePython(code)); } catch (e) { return hitungMentah(); }
+}
+
+// Hitung kasar baris/blok saat program belum valid.
+function hitungMentah() {
+  if (L().mode === "code") return document.getElementById("code").value.split("\n")
+    .map(s => s.trim()).filter(s => s.length && !s.startsWith("#")).length;
+  return ws.getAllBlocks(false).filter(b => !b.isShadow() && b.type !== "math_number").length;
+}
+
+// True (dan tampilkan pesan) bila biaya melewati kuota keras.
+function melewatiKuota() {
+  const k = L().kuotaKeras;
+  if (k == null || biayaSaatIni() <= k) return false;
+  setMsg("Kuota " + k + " pernyataan terlampaui — Jalankan terkunci. Buat lebih ringkas dengan ULANGI.", "err");
+  return true;
+}
+
+// ============ LEVEL BAR & MUAT LEVEL ============
+// Muat level ke-i dan reset seluruh tampilan.
+function loadLevel(i) {
+  lvlIdx = i; petaIdx = 0;
+  stop(); finished = false; hasil = null; trace = null; traceIdx = 0; lineMap = {};
+  hapusSorotYatim();
+  ws.clear(); ws.highlightBlock(null); blokSorot = null;
+  const lv = L(), isCode = lv.mode === "code";
+  document.getElementById("blocklyDiv").style.display = isCode ? "none" : "";
+  document.getElementById("codeWrap").style.display = isCode ? "flex" : "none";
+  document.getElementById("pybox").style.display = isCode ? "none" : "";
+  if (isCode) {
+    const codeEl = document.getElementById("code");
+    codeEl.value = lv.template || "";
+    codeEl.placeholder = lv.placeholder || "# Tulis kode Python-mu di sini";
+    hintsShown = 0;
+    document.getElementById("hintBox").textContent = "";
+    const btn = document.getElementById("btnHint");
+    btn.textContent = "💡 Petunjuk (0/" + (lv.hints ? lv.hints.length : 0) + ")";
+    btn.disabled = !lv.hints;
+  } else {
+    ws.updateToolbox({ kind: "categoryToolbox", contents: toolboxDari(lv) });
+  }
+  setMsg("", ""); hideOverlay();
+  renderAll();
+  if (!isCode && ws) setTimeout(() => Blockly.svgResize(ws), 30);
+}
+
+// ============ EKSEKUSI ============
+// Kompilasi + jalankan SEMUA varian lewat engine. Return false kalau program belum sah.
+function prepare() {
+  const lv = L();
+  hapusSorotYatim();
+  let src;
+  try { src = sumberKode(); }
+  catch (e) { setMsg("⚠ " + e.pesan, "err"); return false; }
+  // Satu program harus satu kesatuan; hanya tumpukan 'buat fungsi' yang boleh berdiri sendiri.
+  if (src.program && src.program.length > 1) {
+    sorotYatim(src.program.slice(1));
+    setMsg("⚠ Ada " + src.program.length + " tumpukan blok terpisah — sambungkan ke satu program.", "err");
+    return false;
+  }
+  document.getElementById("pycode").textContent = src.code || "(belum ada program)";
+  if (!src.code.trim()) { setMsg(lv.mode === "code" ? "Tulis kodumu dulu di editor!" : "Susun program dulu di workspace Blockly!", "err"); return false; }
+  const r = evaluateProgram(src.code, lv, { hintsUsed: hintsShown });
+  lineMap = src.lineMap;
+  if (!r.ok && (r.jenis === ERR.SINTAKS || r.jenis === ERR.MELEBIHI_KUOTA)) {
+    setMsg("⚠ " + (r.jenis === ERR.SINTAKS ? "Baris " + r.line + ": " : "") + r.pesan, "err");
+    return false;
+  }
+  hasil = r;
+  petaIdx = r.gagal ? r.gagal.nomor - 1 : 0;
+  trace = r.hasil[petaIdx].trace; traceIdx = 0;
+  resetSimState();
+  return true;
+}
+
+// Tandai blok yang terpisah dari program utama.
+function sorotYatim(daftar) {
+  yatim = daftar;
+  daftar.forEach(b => b.svgGroup && b.svgGroup.classList.add("lb-orphan"));
+}
+
+// Hapus tanda pada blok yang terpisah.
+function hapusSorotYatim() {
+  yatim.forEach(b => b.svgGroup && b.svgGroup.classList.remove("lb-orphan"));
+  yatim = [];
+}
+
+// Terapkan satu langkah trace ke robot lalu gambar ulang board.
+function terapkan(st) {
+  rob = { x: st.x, y: st.y, dir: st.dir };
+  currentItems = st.items;
+  drawBoard(st.bad);
+}
+
+let blokSorot = null;
+
+// Sorot baris kode / blok yang sedang dijalankan.
+function sorotBaris(n) {
+  const el = document.getElementById("aktif");
+  if (el) el.textContent = n ? "▶ Baris " + n : "Siap Dijalankan";
+  if (L().mode === "code") return;
+  const b = n ? ws.getBlockById(lineMap[n]) : null;
+  ws.highlightBlock(b ? b.id : null);
+  if (blokSorot === b) return;
+  if (blokSorot && blokSorot.svgGroup) blokSorot.svgGroup.classList.remove("lb-run");
+  blokSorot = b || null;
+  // Blockly hanya memasang filter emboss yang nyaris tak terlihat — tambahkan garis luar sendiri.
+  if (b) b.svgGroup.classList.add("lb-run");
+}
+
+// Susun pesan gagal lengkap dengan nomor peta uji dan baris.
+function pesanGagal(r) {
+  const v = r.gagal && jumlahVarian() > 1 ? "Gagal di peta uji ke-" + r.gagal.nomor + " — " : "";
+  return v + r.pesan + (r.line ? " (baris " + r.line + ")" : "");
+}
+
+// Maju satu langkah trace; false bila selesai atau gagal.
+function advanceOne() {
+  if (!trace) return false;
+  if (traceIdx >= trace.length) return selesaikan();
+  const st = trace[traceIdx++];
+  terapkan(st); sorotBaris(st.line);
+  if (st.bad) { stop(); setMsg("❌ " + pesanGagal(hasil), "err"); return false; }
+  if (traceIdx >= trace.length) return selesaikan();
+  return true;
+}
+
+// Menang dinilai dari KEADAAN AKHIR program (engine), bukan saat robot mampir ke tujuan.
+function selesaikan() {
+  stop(); sorotBaris(null);
+  const r = hasil;
+  if (r.ok) { finish(r); return false; }
+  setMsg("❌ " + pesanGagal(r), "err");
+  return false;
+}
+
+// Tampilkan layar menang dengan rincian evaluasi Berpikir Komputasional lengkap.
+function finish(r) {
+  stop(); finished = true;
+  const lv = L();
+  const icon = r.score >= 85 ? "🏆" : "🎉";
+  const judul = "Skor: " + r.score + "/100 — " + r.predikat + " ★" + r.stars + (r.bonus ? " ⚡" : "");
+  const pesan =
+    "Hasil Evaluasi Berpikir Komputasional:\n" +
+    "• Kebenaran Logika: " + (r.rubrik ? r.rubrik.kebenaran : 50) + " / 50 poin\n" +
+    "• Efisiensi Algoritma: " + (r.rubrik ? r.rubrik.efisiensi : 30) + " / 30 poin (Pernyataan: " + r.cost + ", Target: ≤" + lv.optimal + ")\n" +
+    "• Kemandirian Siswa: " + (r.rubrik ? r.rubrik.kemandirian : 20) + " / 20 poin (Petunjuk: " + hintsShown + ")\n" +
+    "• Total Langkah: " + r.steps + (lv.langkahBonus != null ? " (Bonus: ≤" + lv.langkahBonus + ")" : "") +
+    (jumlahVarian() > 1 ? " · Lolos " + jumlahVarian() + " varian peta uji" : "") + "\n\n" +
+    (r.score >= 85 ? "Sempurna! Algoritma sangat optimal dan menerapkan prinsip dekomposisi serta efisiensi dengan sangat baik." :
+     r.score >= 70 ? "Bagus! Algoritma berhasil menyelesaikan misi, namun masih bisa diringkas menggunakan perulangan." :
+     "Robot berhasil mencapai tujuan, namun masih menggunakan sekuens panjang. Cobalah gunakan perulangan untuk meraih skor Mahir!");
+  showOverlay(icon, judul, pesan);
+  renderHud();
+}
+
+// Tombol Jalankan: kompilasi lalu animasikan program.
+document.getElementById("btnRun").onclick = () => {
+  if (finished || melewatiKuota()) return;
+  stop();
+  if (!prepare()) return;
+  // Loop tak berujung menghasilkan trace sampai STEP_CAP — tidak masuk akal dianimasi per langkah.
+  if (hasil.jenis === ERR.LOOP_TAK_BERUNJUNG || kecepatan() === 0) { keAkhir(); return; }
+  running = true; kunciEditing(true); setMsg("Mengompilasi & menjalankan…", "");
+  timer = setInterval(() => { if (!running || !advanceOne()) clearInterval(timer); }, kecepatan());
+};
+
+// Tombol Langkah: maju satu perintah.
+document.getElementById("btnStep").onclick = () => {
+  if (finished || melewatiKuota()) return;
+  if (!trace || !hasil) { if (!prepare()) return; setMsg("Mode langkah: tekan lagi untuk maju 1 perintah.", ""); return; }
+  stop();
+  if (!advanceOne()) trace = null;
+};
+
+// "Ke akhir": selesaikan sisa trace tanpa animasi, lalu nilai seperti biasa.
+function keAkhir() {
+  if (trace && traceIdx < trace.length) {
+    const st = trace[trace.length - 1];
+    traceIdx = trace.length;
+    terapkan(st); sorotBaris(st.line);
+  }
+  selesaikan();
+}
+
+// Tombol Ke Akhir: lompat langsung ke hasil akhir.
+document.getElementById("btnEnd").onclick = () => {
+  if (finished || melewatiKuota()) return;
+  if (!trace || !hasil) { if (!prepare()) return; }
+  stop(); keAkhir();
+};
+
+// Tombol Reset: kembalikan robot ke posisi awal.
+document.getElementById("btnReset").onclick = () => {
+  stop(); hasil = null; trace = null; traceIdx = 0; sorotBaris(null); resetSimState(); setMsg("", "");
+};
+
+// Kembalikan robot dan item ke keadaan awal peta aktif.
+function resetSimState() {
+  const p = petaAktif();
+  ukuranBoard(p);
+  rob = { x: p.start.x, y: p.start.y, dir: p.start.dir };
+  currentItems = (p.items || []).map(i => ({ x: i[0], y: i[1], taken: false }));
+  drawBoard(false);
+}
+
+// Canvas mengikuti aspek peta (cell = lantai dari 360 / sisi terpanjang) — tanpa area kosong.
+function ukuranBoard(p) {
+  const cv = document.getElementById("board"), cell = Math.floor(360 / Math.max(p.w, p.h));
+  cv.width = p.w * cell; cv.height = p.h * cell;
+}
+
+// Kecepatan animasi dari slider (0 = langsung ke akhir).
+function kecepatan() { return +document.getElementById("speed").value; }
+
+// Editing dikunci selama program berjalan, dibuka lagi saat berhenti/Reset.
+function kunciEditing(kunci) {
+  document.getElementById("blocklyDiv").inert = kunci;
+  document.getElementById("code").readOnly = kunci;
+}
+
+// Hentikan animasi dan buka kunci editing.
+function stop() { running = false; clearInterval(timer); kunciEditing(false); }
+
+// ============ RENDER ============
+// Render ulang level bar, HUD, kode Python, dan board.
+function renderAll() { renderLevelBar(); renderHud(); updatePy(); resetSimState(); }
+
+// Bangun tombol pilih level beserta judul dan misi.
+function renderLevelBar() {
+  const bar = document.getElementById("lvlbar"); bar.innerHTML = "";
+  LEVELS.forEach((lv, i) => {
+    const b = document.createElement("button");
+    b.className = "lbtn" + (i === lvlIdx ? " dipilih" : "");
+    b.textContent = "Level " + lv.no;
+    b.onclick = () => { if (i !== lvlIdx) loadLevel(i); };
+    bar.appendChild(b);
+  });
+  document.getElementById("lvlname").textContent = "Level " + L().no + ": " + L().nama;
+  document.getElementById("mission").textContent = L().misi;
+}
+
+// Perbarui kuota, skor edukasi, dan status eksekusi pada dashboard HUD.
+function renderHud() {
+  const lv = L(), used = biayaSaatIni(), keras = lv.kuotaKeras != null;
+  // Efisiensi pernyataan
+  const quotaEl = document.getElementById("quota");
+  if (quotaEl) {
+    quotaEl.innerHTML = "<b" + (keras && used > lv.kuotaKeras ? ' class="quota-over"' : "") +
+      ">" + used + "</b> / " + lv.optimal + " pernyataan";
+  }
+  const hintEl = document.getElementById("quota-hint");
+  if (hintEl) {
+    hintEl.textContent = "Optimal: ≤ " + lv.optimal + (keras ? " · Maks: " + lv.kuotaKeras : " · Cukup: ≤ " + lv.target2);
+  }
+
+  // Skor Berpikir Komputasional & Predikat KKTP
+  const scoreVal = document.getElementById("hudScoreVal");
+  const badgeEl = document.getElementById("hudBadge");
+  if (scoreVal && badgeEl) {
+    if (hasil && hasil.ok) {
+      scoreVal.textContent = hasil.score;
+      badgeEl.textContent = hasil.predikat;
+      badgeEl.className = "grade-badge " +
+        (hasil.score >= 85 ? "grade-mahir" : hasil.score >= 70 ? "grade-cakap" : hasil.score >= 50 ? "grade-dasar" : "grade-bimbingan");
+    } else {
+      scoreVal.textContent = "—";
+      badgeEl.textContent = hasil && !hasil.ok ? "Perlu Debug" : "Belum Diuji";
+      badgeEl.className = "grade-badge " + (hasil && !hasil.ok ? "grade-bimbingan" : "grade-waiting");
+    }
+  }
+
+  // Sinkronisasi elemen bintang untuk kompatibilitas pengujian
+  const dapat = hasil && hasil.ok ? hasil.stars : 0;
+  ["s1", "s2", "s3"].forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (el) el.className = "star" + (dapat >= i + 1 ? " on" : "");
+  });
+
+  const bonus = document.getElementById("bonus");
+  if (bonus) {
+    bonus.textContent = lv.langkahBonus != null ? "⚡ bonus ≤ " + lv.langkahBonus + " langkah" : "";
+    bonus.className = "hud-sub" + (hasil && hasil.bonus ? " on" : "");
+  }
+  const varEl = document.getElementById("varian");
+  if (varEl) {
+    varEl.textContent = "Peta uji " + (petaIdx + 1) + "/" + jumlahVarian() +
+      (jumlahVarian() > 1 ? " (varian tersembunyi)" : "");
+  }
+}
+
+// Perbarui panel kode Python dari blok.
+function updatePy() {
+  if (L().mode === "code") return;
+  let src;
+  try { src = blocksToPython(ws); }
+  catch (e) { document.getElementById("pycode").textContent = "(blok belum lengkap: " + e.pesan + ")"; return; }
+  document.getElementById("pycode").textContent = src.code || "(susun blok untuk melihat kode Python di sini)";
+}
+
+// Tampilkan pesan di kotak status (cls: 'err' atau kosong).
+function setMsg(t, cls) { const m = document.getElementById("msg"); m.textContent = t; m.className = "box " + (cls || ""); }
+
+// Gambar seluruh board: lantai, dinding, tujuan, item, robot.
+function drawBoard(bad) {
+  const p = petaAktif(), cv = document.getElementById("board"), ctx = cv.getContext("2d");
+  const cell = Math.min(cv.width / p.w, cv.height / p.h);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) {
+    const px = x * cell, py = y * cell;
+    gambarLantai(ctx, px, py, cell, (x + y) % 2 === 1);
+    if ((p.walls || []).some(w => w[0] === x && w[1] === y)) { gambarDinding(ctx, px, py, cell); continue; }
+    if (x === p.target.x && y === p.target.y) gambarTujuan(ctx, px, py, cell);
+  }
+  currentItems.forEach(it => { if (!it.taken) gambarItem(ctx, it.x * cell, it.y * cell, cell); });
+  if (bad) {
+    ctx.save(); ctx.globalAlpha = .45; ctx.fillStyle = THEME.robotCrash;
+    ctx.fillRect(rob.x * cell + 1, rob.y * cell + 1, cell - 2, cell - 2); ctx.restore();
+  }
+  gambarRobot(ctx, rob.x * cell + cell / 2, rob.y * cell + cell / 2, cell, rob.dir, bad);
+  ariaBoard(p, bad);
+}
+
+// Papan hanya gambar, jadi posisinya dilaporkan lewat aria-label yang diperbarui tiap langkah.
+const ARAH = ["utara", "timur", "selatan", "barat"];
+
+// Perbarui aria-label board dengan posisi robot saat ini.
+function ariaBoard(p, bad) {
+  const sisa = currentItems.filter(i => !i.taken).length;
+  document.getElementById("board").setAttribute("aria-label",
+    "Peta " + p.w + " krat kali " + p.h + ". Robot di kolom " + (rob.x + 1) + ", baris " + (rob.y + 1) +
+    ", menghadap " + ARAH[rob.dir] + (bad ? ", sedang menabrak" : "") +
+    ". Petak tujuan di kolom " + (p.target.x + 1) + ", baris " + (p.target.y + 1) + "." +
+    (currentItems.length ? " Item tersisa " + sisa + " dari " + currentItems.length + "." : ""));
+}
+
+let fokusSebelum = null;
+
+// Tampilkan dialog hasil dan pindahkan fokus ke dalamnya.
+function showOverlay(icon, title, text) {
+  try { ws.hideChaff(); } catch (e) {}
+  document.getElementById("ovIcon").textContent = icon;
+  document.getElementById("ovTitle").textContent = title;
+  document.getElementById("ovText").textContent = text;
+  document.getElementById("ovNext").style.display = lvlIdx < LEVELS.length - 1 ? "inline-block" : "none";
+  document.getElementById("overlay").style.display = "flex";
+  fokusSebelum = document.activeElement;
+  tombolOverlay()[0].focus();           // fokus ke tombol pertama saat dialog tampil
+  document.querySelector("#overlay .card").addEventListener("keydown", trapFokus);
+}
+
+// Daftar tombol yang terlihat di dialog.
+function tombolOverlay() {
+  return Array.prototype.filter.call(document.querySelectorAll("#overlay .card button"), b => b.offsetParent !== null);
+}
+
+// Tab berputar di dalam dialog; Esc = Coba Lagi.
+function trapFokus(e) {
+  if (e.key === "Escape") { e.preventDefault(); document.getElementById("ovRetry").click(); return; }
+  if (e.key !== "Tab") return;
+  const f = tombolOverlay(), first = f[0], last = f[f.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+
+// Sembunyikan dialog dan kembalikan fokus.
+function hideOverlay() {
+  document.getElementById("overlay").style.display = "none";
+  document.querySelector("#overlay .card").removeEventListener("keydown", trapFokus);
+  if (fokusSebelum && fokusSebelum.focus) fokusSebelum.focus();  // kembali ke tombol Jalankan
+  fokusSebelum = null;
+}
+
+// Tombol Coba Lagi: tutup dialog dan ulang level.
+document.getElementById("ovRetry").onclick = () => {
+  hideOverlay(); finished = false; hasil = null; trace = null; traceIdx = 0; petaIdx = 0;
+  sorotBaris(null); resetSimState(); setMsg("", ""); renderHud();
+};
+
+// Tombol Lanjut: muat level berikutnya.
+document.getElementById("ovNext").onclick = () => loadLevel(lvlIdx + 1);
+
+// ============ INJEKSI BLOCKLY ============
+ws = Blockly.inject("blocklyDiv", {
+  toolbox: { kind: "categoryToolbox", contents: [] },
+  theme: TEMA_BLOCKLY,
+  // Edisi tanpa aset: suara dimatikan, dan `media` tetap lokal supaya tidak ada aturan CSS
+  // yang tertinggal meminta file ke host lain (semuanya sudah dinetralkan di <style> di atas).
+  sounds: false, media: "lib/media/",
+  trashcan: false, grid: { spacing: 16, length: 2, colour: THEME.wall, snap: true },
+  zoom: { controls: false, wheel: true, startScale: 0.85, maxScale: 1.2, minScale: 0.6 },
+  renderer: "geras", move: { scrollbars: true, drag: true, wheel: true }
+});
+
+// Perbarui HUD dan kode Python setiap blok berubah.
+ws.addChangeListener(e => {
+  if (e.type === Blockly.Events.BLOCK_CREATE && e.blockId) {
+    const b = ws.getBlockById(e.blockId);
+    if (b && b.type === "lb_repeat") fixRepeatSlot(b);
+  }
+  if (e.type === Blockly.Events.BLOCK_CHANGE || e.type === Blockly.Events.BLOCK_CREATE ||
+      e.type === Blockly.Events.BLOCK_DELETE || e.type === Blockly.Events.BLOCK_MOVE) {
+    renderHud(); updatePy();
+    if (!melewatiKuota() && document.getElementById("msg").classList.contains("err") && !running) setMsg("", "");
+  }
+});
+
+// Jaring pengaman: kalau shadow dari toolbox tidak terpasang (jalur pembuatan blok tertentu),
+// angka default 3 dipasang otomatis supaya slot tidak pernah kosong tanpa suara.
+function fixRepeatSlot(b) {
+  if (b.type !== "lb_repeat" || b.getInputTargetBlock("TIMES")) return;
+  Blockly.Events.disable();
+  try {
+    const mn = Blockly.serialization.blocks.append({ type: "math_number", fields: { NUM: 3 } }, b.workspace);
+    b.getInput("TIMES").connection.connect(mn.outputConnection);
+    b.render();
+  } finally { Blockly.Events.enable(); }
+}
+
+loadLevel(0);
+
+// ============ TAMPILAN ADAPTIF MULTI-PERANGKAT ============
+// Sesuaikan ukuran SVG Blockly secara dinamis saat orientasi atau resolusi layar berubah
+window.addEventListener("resize", () => {
+  if (ws && L().mode !== "code") Blockly.svgResize(ws);
+});
+
+// ============ MODE KODE: EDITOR & PETUNJUK BERTINGKAT ============
+const codeEl = document.getElementById("code");
+codeEl.addEventListener("input", renderHud);
+
+// Tombol Tab menyisipkan 4 spasi di editor.
+codeEl.addEventListener("keydown", e => {
+  if (e.key === "Tab") {
+    e.preventDefault();
+    codeEl.setRangeText("    ", codeEl.selectionStart, codeEl.selectionEnd, "end");
+    renderHud();
+  }
+});
+
+// Tombol Petunjuk: tampilkan petunjuk berikutnya.
+document.getElementById("btnHint").onclick = () => {
+  const lv = L();
+  if (!lv.hints) return;
+  const box = document.getElementById("hintBox");
+  box.textContent += (hintsShown ? "\n\n" : "") + lv.hints[hintsShown];
+  hintsShown++;
+  const btn = document.getElementById("btnHint");
+  btn.textContent = "💡 Petunjuk (" + hintsShown + "/" + lv.hints.length + ")";
+  if (hintsShown >= lv.hints.length) btn.disabled = true;
+};
+
+// ============ TITIK MASUK UJI (hanya saat halaman dibuka dengan ?debug) ============
+if (/[?&]debug/.test(location.search)) window.LB = {
+  engine: EN, get ws() { return ws; }, blocksToPython, loadLevel, biayaSaatIni, prepare, advanceOne,
+  keAkhir, LEVELS, fixRepeatSlot, toolboxDari, namaFungsi, ukuranBoard,
+  get lvl() { return lvlIdx; }, get hasil() { return hasil; }, get trace() { return trace; },
+  get kecepatan() { return kecepatan(); },
+  selfTest: () => EN.selfChecks()
+};
+</script>
+</body>
+</html>
