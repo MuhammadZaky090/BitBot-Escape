@@ -1,9 +1,12 @@
 {
   "name": "bitbot-escape",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "BitBot Escape — Game edukasi Berpikir Komputasional & Algoritma (Blockly -> Python -> engine AST).",
   "scripts": {
     "test": "node --test"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.0"
   }
 }

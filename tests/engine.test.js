@@ -399,7 +399,7 @@ test("index.html tidak merujuk aset apa pun dan tidak memanggil CDN", () => {
   // Folder ini memang tidak boleh berisi aset.
   const root = p.join(__dirname, "..");
   const adaAset = fs.readdirSync(root, { recursive: true }).some(f =>
-    /\.(png|jpe?g|gif|svg|mp3|ogg|wav|cur|woff2?)$/i.test(f));
+    !f.includes("node_modules") && !f.includes(".git") && /\.(png|jpe?g|gif|svg|mp3|ogg|wav|cur|woff2?)$/i.test(f));
   assert.equal(adaAset, false, "ditemukan file aset di folder BitBot Escape");
 });
 
