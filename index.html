@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LogicBlocky — Edisi Tanpa Aset (vektor)</title>
+<title>BitBot Escape</title>
 <script src="engine.js"></script>
 <script src="lib/blockly.min.js"></script>
 <style>
@@ -206,6 +206,7 @@
   .cbtn { flex: 1; border: none; border-radius: var(--r-sm); padding: 10px; font-size: var(--fs-md); cursor: pointer; font-weight: 600; color: var(--ink); transition: filter var(--t-fast); }
   .cbtn:hover:not(:disabled) { filter: brightness(1.12); }
   .c-run { background: var(--success); } .c-step { background: var(--info); } .c-reset { background: var(--neutral-btn); }
+  .c-end { background: var(--neutral-btn); } .c-export { background: var(--p-navy-700); }
   .cbtn:disabled { opacity: .4; cursor: not-allowed; }
   #msg.err { color: var(--danger); } #msg.ok { color: var(--success-text); }
   #msg { min-height: 22px; line-height: 1.5; }
@@ -287,6 +288,7 @@
         <option value="0">Langsung</option>
       </select>
       <button class="cbtn c-end" id="btnEnd">Ke akhir</button>
+      <button class="cbtn c-export" id="btnExport" title="Ekspor data percobaan ke format CSV">📥 Ekspor CSV</button>
     </div>
     <div class="box" id="msg" aria-live="polite"></div>
   </div>
@@ -330,6 +332,11 @@
 
 <script>
 'use strict';
+// Pengaman dependensi: cegah halaman gagal tanpa pesan bila berkas tidak lengkap
+if (typeof LBEngine === "undefined" || typeof Blockly === "undefined") {
+  document.body.innerHTML = '<div style="background:#151a26;color:#ff6b6b;padding:32px;text-align:center;font-family:sans-serif;border-radius:12px;margin:40px auto;max-width:600px;border:1px solid #ff6b6b;line-height:1.6;"><h2>Berkas Tidak Ditemukan</h2><p>Berkas <code>engine.js</code> atau <code>lib/blockly.min.js</code> tidak termuat.<br>Pastikan seluruh isi folder sudah diekstrak utuh dari berkas ZIP sebelum membuka <code>index.html</code>.</p></div>';
+  throw new Error("Dependensi tidak termuat: engine.js atau lib/blockly.min.js tidak ditemukan.");
+}
 // Engine murni ada di engine.js (LBEngine). File ini hanya: UI, Blockly, generator blok->Python, Canvas.
 // CATATAN: nama global dari engine.js (LEVELS, ERR, compilePython, countStatements, evaluateProgram,
 // varian, STEP_CAP, DIRS, ...) dipakai langsung di sini — tidak boleh dideklarasikan ulang.
@@ -564,8 +571,10 @@ function blocksToPython(workspace) {
       else if (t === "lb_repeat") {
         const numB = b.getInputTargetBlock("TIMES");
         const raw = numB ? String(numB.getFieldValue("NUM")).trim() : "";
+        if (!numB || !raw)
+          throw { line: baris.length + 1, pesan: "Slot angka pada blok 'ulangi' masih kosong — pasang blok angka!" };
         if (!/^\d+$/.test(raw))
-          throw { line: baris.length + 1, pesan: "Slot angka pada blok 'ulangi' masih kosong — isi dengan blok angka (bilangan bulat ≥ 0)!" };
+          throw { line: baris.length + 1, pesan: "Nilai perulangan '" + raw + "' tidak sah — harus bilangan bulat positif (≥ 0)!" };
         out(indent + "for i in range(" + raw + "):", b);
         const body = b.getInputTargetBlock("DO");
         if (body) emit(body, indent + "    ");
@@ -629,6 +638,135 @@ function toolboxDari(level) { return (level.kategori || []).map(k => KAT[k] && K
 // ============ STATE UI ============
 let lvlIdx = 0, ws = null, hasil = null, trace = null, traceIdx = 0, running = false, timer = null,
     finished = false, hintsShown = 0, petaIdx = 0, lineMap = {}, rob = null, currentItems = [], yatim = [];
+let hintsUsedPerLevel = {};
+let levelCrashes = {};
+
+// Batalkan hasil simulasi sebelumnya saat kode atau blok diubah (mencegah stale state)
+function invalidateRun() {
+  if (running) return;
+  hasil = null; trace = null; traceIdx = 0; finished = false;
+}
+
+// Simpan workspace level aktif ke localStorage (mencegah kode terhapus saat ganti level F3)
+function simpanWorkspace(idx) {
+  try {
+    const lv = LEVELS[idx];
+    if (!lv) return;
+    if (lv.mode === "code") {
+      const el = document.getElementById("code");
+      if (el) localStorage.setItem("bitbot_ws_code_" + idx, el.value);
+    } else if (ws) {
+      const data = Blockly.serialization.workspaces.save(ws);
+      localStorage.setItem("bitbot_ws_blocks_" + idx, JSON.stringify(data));
+    }
+  } catch (e) {}
+}
+
+// Muat kembali workspace tersimpan untuk level tertentu
+function muatWorkspace(idx) {
+  const lv = LEVELS[idx], isCode = lv.mode === "code";
+  if (isCode) {
+    const codeEl = document.getElementById("code");
+    const saved = localStorage.getItem("bitbot_ws_code_" + idx);
+    codeEl.value = (saved !== null) ? saved : (lv.template || "");
+    codeEl.placeholder = lv.placeholder || "# Tulis kode Python-mu di sini";
+  } else if (ws) {
+    ws.clear();
+    const saved = localStorage.getItem("bitbot_ws_blocks_" + idx);
+    if (saved) {
+      try {
+        Blockly.serialization.workspaces.load(JSON.parse(saved), ws);
+      } catch (err) {
+        ws.clear();
+      }
+    }
+  }
+}
+
+// Catat riwayat percobaan eksekusi ke localStorage untuk analisis penelitian pretest/posttest
+function catatPercobaan(r) {
+  try {
+    const lv = L();
+    let srcCode = "";
+    try { srcCode = sumberKode().code || ""; } catch (e) { srcCode = ""; }
+    const logItem = {
+      waktu: new Date().toISOString(),
+      level: lvlIdx + 1,
+      nama_level: lv.nama,
+      mode: lv.mode,
+      berhasil: !!r.ok,
+      skor: r.score != null ? r.score : 0,
+      predikat: r.predikat || "-",
+      bintang: r.stars != null ? r.stars : 0,
+      biaya: r.cost != null ? r.cost : (biayaSaatIni() || 0),
+      optimal: lv.optimal,
+      langkah: r.steps != null ? r.steps : 0,
+      tabrakan: levelCrashes[lvlIdx] || 0,
+      petunjuk: hintsShown || 0,
+      jenis_error: r.jenis || "-",
+      pesan_error: r.pesan || "",
+      kode: srcCode
+    };
+    const key = "bitbot_attempts";
+    const daftar = JSON.parse(localStorage.getItem(key) || "[]");
+    daftar.push(logItem);
+    localStorage.setItem(key, JSON.stringify(daftar));
+  } catch (e) {}
+}
+
+// Ekspor seluruh rekaman percobaan ke file CSV untuk instrumen penelitian guru/peneliti
+function eksporLogCSV() {
+  try {
+    const raw = localStorage.getItem("bitbot_attempts");
+    const daftar = raw ? JSON.parse(raw) : [];
+    if (!daftar.length) {
+      alert("Belum ada data percobaan yang tercatat untuk diekspor.");
+      return;
+    }
+    const headers = [
+      "Waktu", "Level", "Nama Level", "Mode", "Berhasil", "Skor", "Predikat",
+      "Bintang", "Biaya Pernyataan", "Target Optimal", "Langkah",
+      "Total Tabrakan", "Petunjuk Digunakan", "Jenis Error", "Pesan Error", "Kode"
+    ];
+    const esc = val => {
+      const s = String(val == null ? "" : val).replace(/"/g, '""');
+      return '"' + s + '"';
+    };
+    const rows = [headers.join(",")];
+    for (const d of daftar) {
+      rows.push([
+        esc(d.waktu),
+        esc(d.level),
+        esc(d.nama_level),
+        esc(d.mode),
+        esc(d.berhasil ? "Ya" : "Tidak"),
+        esc(d.skor),
+        esc(d.predikat),
+        esc(d.bintang),
+        esc(d.biaya),
+        esc(d.optimal),
+        esc(d.langkah),
+        esc(d.tabrakan),
+        esc(d.petunjuk),
+        esc(d.jenis_error),
+        esc(d.pesan_error),
+        esc(d.kode)
+      ].join(","));
+    }
+    const csvContent = "\uFEFF" + rows.join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "bitbot_escape_log_" + new Date().toISOString().slice(0, 10) + ".csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert("Gagal mengekspor data: " + e.message);
+  }
+}
 
 // Level yang sedang aktif.
 function L() { return LEVELS[lvlIdx]; }
@@ -660,10 +798,17 @@ function hitungMentah() {
   return ws.getAllBlocks(false).filter(b => !b.isShadow() && b.type !== "math_number").length;
 }
 
-// True (dan tampilkan pesan) bila biaya melewati kuota keras.
+// True (dan tampilkan pesan) bila biaya melewati kuota keras (hanya jika program sah secara sintaks).
 function melewatiKuota() {
   const k = L().kuotaKeras;
-  if (k == null || biayaSaatIni() <= k) return false;
+  if (k == null) return false;
+  let code;
+  try { code = sumberKode().code; } catch (e) { return false; }
+  if (!code.trim()) return false;
+  let ast;
+  try { ast = compilePython(code); } catch (e) { return false; } // Jangan kunci jika masih ada kesalahan sintaks
+  const used = countStatements(ast);
+  if (used <= k) return false;
   setMsg("Kuota " + k + " pernyataan terlampaui — Jalankan terkunci. Buat lebih ringkas dengan ULANGI.", "err");
   return true;
 }
@@ -671,26 +816,37 @@ function melewatiKuota() {
 // ============ LEVEL BAR & MUAT LEVEL ============
 // Muat level ke-i dan reset seluruh tampilan.
 function loadLevel(i) {
+  if (ws || document.getElementById("code")) {
+    simpanWorkspace(lvlIdx);
+  }
   lvlIdx = i; petaIdx = 0;
   stop(); finished = false; hasil = null; trace = null; traceIdx = 0; lineMap = {};
   hapusSorotYatim();
-  ws.clear(); ws.highlightBlock(null); blokSorot = null;
+  if (ws) { ws.clear(); ws.highlightBlock(null); }
+  blokSorot = null;
   const lv = L(), isCode = lv.mode === "code";
   document.getElementById("blocklyDiv").style.display = isCode ? "none" : "";
   document.getElementById("codeWrap").style.display = isCode ? "flex" : "none";
   document.getElementById("pybox").style.display = isCode ? "none" : "";
-  if (isCode) {
-    const codeEl = document.getElementById("code");
-    codeEl.value = lv.template || "";
-    codeEl.placeholder = lv.placeholder || "# Tulis kode Python-mu di sini";
-    hintsShown = 0;
-    document.getElementById("hintBox").textContent = "";
-    const btn = document.getElementById("btnHint");
-    btn.textContent = "💡 Petunjuk (0/" + (lv.hints ? lv.hints.length : 0) + ")";
-    btn.disabled = !lv.hints;
-  } else {
+
+  // Pulihkan petunjuk yang telah dibuka pada level ini (mencegah reset petunjuk F5)
+  hintsShown = hintsUsedPerLevel[lvlIdx] || 0;
+  const hintBox = document.getElementById("hintBox");
+  hintBox.textContent = "";
+  if (lv.hints && hintsShown > 0) {
+    hintBox.textContent = lv.hints.slice(0, hintsShown).join("\n\n");
+  }
+  const btn = document.getElementById("btnHint");
+  btn.textContent = "💡 Petunjuk (" + hintsShown + "/" + (lv.hints ? lv.hints.length : 0) + ")";
+  btn.disabled = !lv.hints || hintsShown >= lv.hints.length;
+
+  if (!isCode) {
     ws.updateToolbox({ kind: "categoryToolbox", contents: toolboxDari(lv) });
   }
+
+  // Muat kode/blok tersimpan pada level ini
+  muatWorkspace(lvlIdx);
+
   setMsg("", ""); hideOverlay();
   renderAll();
   if (!isCode && ws) setTimeout(() => Blockly.svgResize(ws), 30);
@@ -701,6 +857,7 @@ function loadLevel(i) {
 function prepare() {
   const lv = L();
   hapusSorotYatim();
+  invalidateRun();
   let src;
   try { src = sumberKode(); }
   catch (e) { setMsg("⚠ " + e.pesan, "err"); return false; }
@@ -712,9 +869,13 @@ function prepare() {
   }
   document.getElementById("pycode").textContent = src.code || "(belum ada program)";
   if (!src.code.trim()) { setMsg(lv.mode === "code" ? "Tulis kodumu dulu di editor!" : "Susun program dulu di workspace Blockly!", "err"); return false; }
-  const r = evaluateProgram(src.code, lv, { hintsUsed: hintsShown });
+  const r = evaluateProgram(src.code, lv, {
+    hintsUsed: hintsShown,
+    crashes: levelCrashes[lvlIdx] || 0
+  });
   lineMap = src.lineMap;
   if (!r.ok && (r.jenis === ERR.SINTAKS || r.jenis === ERR.MELEBIHI_KUOTA)) {
+    catatPercobaan(r);
     setMsg("⚠ " + (r.jenis === ERR.SINTAKS ? "Baris " + r.line + ": " : "") + r.pesan, "err");
     return false;
   }
@@ -772,7 +933,7 @@ function advanceOne() {
   if (traceIdx >= trace.length) return selesaikan();
   const st = trace[traceIdx++];
   terapkan(st); sorotBaris(st.line);
-  if (st.bad) { stop(); setMsg("❌ " + pesanGagal(hasil), "err"); return false; }
+  if (st.bad) return selesaikan();
   if (traceIdx >= trace.length) return selesaikan();
   return true;
 }
@@ -781,6 +942,11 @@ function advanceOne() {
 function selesaikan() {
   stop(); sorotBaris(null);
   const r = hasil;
+  if (!r) return false;
+  if (!r.ok && r.jenis === ERR.TABRAK_DINDING) {
+    levelCrashes[lvlIdx] = (levelCrashes[lvlIdx] || 0) + 1;
+  }
+  catatPercobaan(r);
   if (r.ok) { finish(r); return false; }
   setMsg("❌ " + pesanGagal(r), "err");
   return false;
@@ -1052,7 +1218,9 @@ ws.addChangeListener(e => {
   }
   if (e.type === Blockly.Events.BLOCK_CHANGE || e.type === Blockly.Events.BLOCK_CREATE ||
       e.type === Blockly.Events.BLOCK_DELETE || e.type === Blockly.Events.BLOCK_MOVE) {
+    invalidateRun();
     renderHud(); updatePy();
+    simpanWorkspace(lvlIdx);
     if (!melewatiKuota() && document.getElementById("msg").classList.contains("err") && !running) setMsg("", "");
   }
 });
@@ -1079,7 +1247,11 @@ window.addEventListener("resize", () => {
 
 // ============ MODE KODE: EDITOR & PETUNJUK BERTINGKAT ============
 const codeEl = document.getElementById("code");
-codeEl.addEventListener("input", renderHud);
+codeEl.addEventListener("input", () => {
+  invalidateRun();
+  renderHud();
+  simpanWorkspace(lvlIdx);
+});
 
 // Tombol Tab menyisipkan 4 spasi di editor.
 codeEl.addEventListener("keydown", e => {
@@ -1097,10 +1269,15 @@ document.getElementById("btnHint").onclick = () => {
   const box = document.getElementById("hintBox");
   box.textContent += (hintsShown ? "\n\n" : "") + lv.hints[hintsShown];
   hintsShown++;
+  hintsUsedPerLevel[lvlIdx] = hintsShown;
   const btn = document.getElementById("btnHint");
   btn.textContent = "💡 Petunjuk (" + hintsShown + "/" + lv.hints.length + ")";
   if (hintsShown >= lv.hints.length) btn.disabled = true;
 };
+
+// Tombol Ekspor CSV riwayat pengerjaan siswa untuk instrumen penelitian
+const btnExp = document.getElementById("btnExport");
+if (btnExp) btnExp.onclick = eksporLogCSV;
 
 // ============ TITIK MASUK UJI (hanya saat halaman dibuka dengan ?debug) ============
 if (/[?&]debug/.test(location.search)) window.LB = {

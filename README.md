@@ -1,4 +1,4 @@
-# LogikaBlok — Edisi Tanpa Aset
+# BitBot Escape — Edisi Tanpa Aset
 
 Versi game yang **tidak memakai satu pun file gambar/suara**: papan petak digambar langsung
 dengan Canvas (vektor dari token warna), jadi folder ini hanya berisi kode.

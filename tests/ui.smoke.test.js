@@ -33,7 +33,12 @@ async function buka(browser, viewport) {
   ctx.on("request", r => {
     const u = r.url();
     if (!u.startsWith("file://")) { eksternal.push(u); return; }
-    const relatif = decodeURIComponent(u.replace(/^file:\/\/\/.*?LogicBloky\//i, "")).replace(/\\/g, "/");
+    const baseDir = path.resolve(__dirname, "..").replace(/\\/g, "/");
+    let relatif = decodeURIComponent(u.replace(/^file:\/\/\/?/i, "")).replace(/\\/g, "/");
+    const baseClean = baseDir.replace(/^[a-zA-Z]:\/?/, "");
+    if (relatif.toLowerCase().includes(baseClean.toLowerCase())) {
+      relatif = relatif.slice(relatif.toLowerCase().indexOf(baseClean.toLowerCase()) + baseClean.length).replace(/^\/+/, "");
+    }
     lokal.push(relatif.replace(/\?.*$/, ""));
   });
   page.on("requestfailed", r => { if (!r.url().startsWith("file://")) eksternal.push(r.url()); });
@@ -62,9 +67,15 @@ test("hanya 3 file yang dimuat: tidak ada permintaan sprite, kursor, atau audio"
   const { ctx, page, lokal } = await buka(browser);
   try {
     // Interaksi yang biasanya memicu permintaan aset: kategori toolbox, drag blok, jalan, menang.
-    await page.evaluate(() => LB.loadLevel(1));
+    await page.evaluate(() => {
+      LB.loadLevel(1);
+      LB.ws.clear();
+      Blockly.serialization.blocks.append({
+        type: "lb_repeat",
+        inputs: { TIMES: { shadow: { type: "math_number", fields: { NUM: 6 } } }, DO: { block: { type: "lb_fwd" } } }
+      }, LB.ws);
+    });
     await page.locator(".blocklyTreeRow").filter({ hasText: "Perulangan" }).click();
-    await page.locator("#blocklyDiv .blocklyFlyout .blocklyDraggable").first().click();
     await page.locator("#btnRun").click();
     await page.waitForFunction("document.getElementById('overlay').style.display === 'flex'");
     const takDikenal = [...new Set(lokal)].filter(f => !FILE_BAKU.includes(f)).sort();
@@ -95,9 +106,12 @@ test("blok 'ulangi' selalu membawa angka, termasuk saat lahir dari flyout", { sk
     assert.ok(flyout.nilai >= 1, "angka flyout tidak sah: " + flyout.nilai);
     assert.match(flyout.kode, /for i in range\(\d+\):/);
     // 3) Jaring pengaman: blok tanpa shadow (jalur pembuatan lain) ikut diisi.
-    const cadangan = await page.evaluate(() => {
+    await page.evaluate(() => {
       LB.ws.clear();
       Blockly.serialization.blocks.append({ type: "lb_repeat" }, LB.ws);
+    });
+    await page.waitForTimeout(100);
+    const cadangan = await page.evaluate(() => {
       const b = LB.ws.getTopBlocks(false)[0];
       return +b.getInputTargetBlock("TIMES").getFieldValue("NUM");
     });
@@ -246,8 +260,11 @@ test("kontrol kecepatan: 'Ke akhir' menuntaskan trace dan editing terkunci saat 
   const browser = await chromium.launch();
   const { ctx, page } = await buka(browser);
   try {
-    await page.evaluate(() => { LB.loadLevel(0); LB.ws.clear();
-      Blockly.serialization.blocks.append({ type: "lb_fwd", x: 40, y: 40 }, LB.ws); });
+    await page.evaluate(() => { LB.loadLevel(1); LB.ws.clear();
+      Blockly.serialization.blocks.append({
+        type: "lb_repeat",
+        inputs: { TIMES: { shadow: { type: "math_number", fields: { NUM: 6 } } }, DO: { block: { type: "lb_fwd" } } }
+      }, LB.ws); });
     await page.locator("#speed").selectOption("380");               // 1x: animasi panjang
     await page.locator("#btnRun").click();
     const tengah = await page.evaluate(() => ({ inert: document.getElementById("blocklyDiv").inert,

@@ -1,8 +1,8 @@
 {
-  "name": "logikablok-tanpa-aset",
-  "version": "0.2.0",
+  "name": "bitbot-escape",
+  "version": "0.3.0",
   "private": true,
-  "description": "LogikaBlok edisi tanpa aset — Blockly -> Python -> engine sendiri, board digambar dengan Canvas. Nol dependensi runtime, nol file gambar/suara.",
+  "description": "BitBot Escape — Game edukasi Berpikir Komputasional & Algoritma (Blockly -> Python -> engine AST).",
   "scripts": {
     "test": "node --test"
   }

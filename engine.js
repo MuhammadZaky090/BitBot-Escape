@@ -1,5 +1,5 @@
 /* =====================================================================
-   LogikaBlok — ENGINE MURNI (demo/engine.js)
+   BitBot Escape — ENGINE MURNI (engine.js)
    Kompilasi subset Python -> AST, interpretasi -> trace, biaya, bintang,
    evaluasi level (termasuk varian peta tersembunyi).
    Aturan keras: TIDAK menyentuh DOM/Blockly/window. Kode pemain tidak pernah
@@ -121,10 +121,12 @@ function compilePython(code) {
     return out;
   }
 
-  // Parse isi blok anak dari baris induk (tidak boleh kosong).
+  // Parse isi blok anak dari baris induk (tidak boleh kosong dan harus kelipatan 4 spasi).
   function parseChild(parent) {
     if (pos >= baris.length || baris[pos].indent <= parent.indent)
       throw errSintaks(parent.n, "Blok '" + parent.text.split(":")[0] + ":' kosong, isi perintahnya dulu!");
+    if (baris[pos].indent % 4 !== 0)
+      throw errSintaks(baris[pos].n, "Indentasi harus kelipatan 4 spasi — baris ini memakai " + baris[pos].indent + " spasi di depan");
     return parseBlock(baris[pos].indent);
   }
 
@@ -311,8 +313,9 @@ function hitungSkorEdukasi(ok, cost, level, opts) {
   const sKebenaran = 50;
   const rasio = Math.min(1, (level.optimal || 1) / Math.max(1, cost));
   const sEfisiensi = Math.round(30 * rasio);
-  const penaltiHint = petunjuk * 5;
-  const penaltiCrash = Math.max(0, tabrakan - 1) * 2;
+  // Penalti petunjuk: 7 poin per petunjuk (3 petunjuk -> kemandirian 0, maks total 80 -> Cakap, tidak bisa Mahir)
+  const penaltiHint = petunjuk * 7;
+  const penaltiCrash = Math.max(0, tabrakan - 1) * 3;
   const sKemandirian = Math.max(0, 20 - penaltiHint - penaltiCrash);
   const total = sKebenaran + sEfisiensi + sKemandirian;
   const predikat = total >= 85 ? "Mahir" : total >= 70 ? "Cakap" : total >= 50 ? "Dasar" : "Perlu Bimbingan";
@@ -328,6 +331,7 @@ function evaluateProgram(code, level, opts) {
   try { ast = compilePython(code); }
   catch (e) {
     if (e.jenis) return { ok: false, jenis: e.jenis, pesan: e.pesan, line: e.line, cost: 0, hasil: [], gagal: null, score: 0, predikat: "Error" };
+    if (e instanceof RangeError) return { ok: false, jenis: ERR.SINTAKS, pesan: "Struktur program terlalu dalam (melebihi batas stack rekursi parser).", line: 1, cost: 0, hasil: [], gagal: null, score: 0, predikat: "Error" };
     throw e;
   }
   const cost = countStatements(ast);
@@ -403,6 +407,21 @@ const LEVELS = [
     solusiReferensi: ["for i in range(6):", "    robot.forward()", "    if robot.item_ahead():", "        robot.take()"].join("\n")
   }
 ];
+LEVELS.forEach(l => {
+  // Sembunyikan solusi referensi dari inspeksi console/JSON.stringify
+  if (l.solusiReferensi) {
+    const sol = l.solusiReferensi;
+    delete l.solusiReferensi;
+    Object.defineProperty(l, "solusiReferensi", {
+      value: sol,
+      enumerable: false,
+      writable: false,
+      configurable: false
+    });
+  }
+  Object.freeze(l);
+});
+Object.freeze(LEVELS);
 
 /* ==================== PEMERIKSAAN MANDIRI ====================
    Dipakai tests/engine.test.js (node --test) dan tombol diagnostik di browser,
