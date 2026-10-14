@@ -324,3 +324,62 @@ test("board vektor: setiap petak terisi warna (bukti: tidak ada piksel transpara
     }
   } finally { await Tutup(ctx); await browser.close(); }
 });
+
+test("regresi: invalidateRun mencegah eksekusi state stale saat kode atau blok diubah", { skip: SKIP }, async () => {
+  const browser = await chromium.launch();
+  const { ctx, page } = await buka(browser);
+  try {
+    await page.evaluate(() => {
+      LB.loadLevel(2);
+      document.getElementById("code").value = "robot.forward()";
+    });
+    await page.locator("#btnRun").click();
+    await page.waitForTimeout(100);
+    const adaHasilAwal = await page.evaluate(() => LB.hasil !== null);
+    assert.strictEqual(adaHasilAwal, true, "hasil awal harus terisi");
+
+    await page.evaluate(() => {
+      const el = document.getElementById("code");
+      el.value = "robot.turn_left()";
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const setelahKetik = await page.evaluate(() => ({
+      hasil: LB.hasil,
+      trace: LB.trace
+    }));
+    assert.strictEqual(setelahKetik.hasil, null, "hasil harus di-invalidate saat kode diedit");
+    assert.strictEqual(setelahKetik.trace, null, "trace harus di-invalidate saat kode diedit");
+  } finally { await Tutup(ctx); await browser.close(); }
+});
+
+test("regresi: pengaman dependensi menampilkan pesan ramah bila engine.js gagal termuat", { skip: SKIP }, async () => {
+  const browser = await chromium.launch();
+  const ctx = await browser.newContext();
+  await ctx.route("**/engine.js", route => route.abort());
+  const page = await ctx.newPage();
+  const indexUrl = "file:///" + path.resolve(__dirname, "..", "index.html").replace(/\\/g, "/");
+  await page.goto(indexUrl);
+  const konten = await page.textContent("body");
+  assert.match(konten, /Berkas Tidak Ditemukan/);
+  assert.match(konten, /engine\.js atau lib\/blockly\.min\.js tidak termuat/);
+  await page.close();
+  await ctx.close();
+  await browser.close();
+});
+
+test("regresi: pengecualian tak terduga pada evaluateProgram ditangkap di prepare tanpa crash", { skip: SKIP }, async () => {
+  const browser = await chromium.launch();
+  const { ctx, page } = await buka(browser);
+  try {
+    await page.evaluate(() => {
+      LB.loadLevel(2);
+      document.getElementById("code").value = "robot.forward()";
+      window.evaluateProgram = () => { throw new Error("Simulasi kegagalan tak terduga engine"); };
+    });
+    await page.locator("#btnRun").click();
+    const msg = await page.textContent("#msg");
+    assert.match(msg, /Terjadi galat saat memproses program/);
+    const inert = await page.evaluate(() => document.getElementById("code").readOnly);
+    assert.strictEqual(inert, false, "editor tidak boleh terkunci");
+  } finally { await Tutup(ctx); await browser.close(); }
+});

@@ -229,6 +229,7 @@
   #overlay p { margin: 10px 0 var(--sp-lg); color: var(--ink-soft); font-size: var(--fs-md); line-height: 1.5; }
   #overlay button { background: var(--success); color: var(--ink); border: none; border-radius: var(--r-sm); padding: 10px 22px; font-size: var(--fs-md); cursor: pointer; margin: 0 4px; transition: filter var(--t-fast); }
   #overlay button:hover { filter: brightness(1.12); }
+  #appFooter { text-align: center; font-size: 11.5px; color: var(--ink-faint); margin: 18px auto 8px; letter-spacing: 0.3px; }
 </style>
 </head>
 <body>
@@ -321,6 +322,7 @@
     <div class="box" id="pybox"><h3>Kode Python hasil terjemahan</h3><div id="pycode"></div></div>
   </div>
 </main>
+<footer id="appFooter">BitBot Escape v0.3.1 (Build 2026.10.14)</footer>
 <div id="overlay" role="dialog" aria-modal="true" aria-labelledby="ovTitle" aria-describedby="ovText">
   <div class="card">
   <div class="big" id="ovIcon"></div>
@@ -643,7 +645,7 @@ let levelCrashes = {};
 
 // Batalkan hasil simulasi sebelumnya saat kode atau blok diubah (mencegah stale state)
 function invalidateRun() {
-  if (running) return;
+  if (running) stop();
   hasil = null; trace = null; traceIdx = 0; finished = false;
 }
 
@@ -868,11 +870,16 @@ function prepare() {
     return false;
   }
   document.getElementById("pycode").textContent = src.code || "(belum ada program)";
-  if (!src.code.trim()) { setMsg(lv.mode === "code" ? "Tulis kodumu dulu di editor!" : "Susun program dulu di workspace Blockly!", "err"); return false; }
-  const r = evaluateProgram(src.code, lv, {
-    hintsUsed: hintsShown,
-    crashes: levelCrashes[lvlIdx] || 0
-  });
+  let r;
+  try {
+    r = evaluateProgram(src.code, lv, {
+      hintsUsed: hintsShown,
+      crashes: levelCrashes[lvlIdx] || 0
+    });
+  } catch (err) {
+    setMsg("⚠ Terjadi galat saat memproses program: " + (err.message || err.pesan || "Galat internal"), "err");
+    return false;
+  }
   lineMap = src.lineMap;
   if (!r.ok && (r.jenis === ERR.SINTAKS || r.jenis === ERR.MELEBIHI_KUOTA)) {
     catatPercobaan(r);
@@ -1282,9 +1289,9 @@ if (btnExp) btnExp.onclick = eksporLogCSV;
 // ============ TITIK MASUK UJI (hanya saat halaman dibuka dengan ?debug) ============
 if (/[?&]debug/.test(location.search)) window.LB = {
   engine: EN, get ws() { return ws; }, blocksToPython, loadLevel, biayaSaatIni, prepare, advanceOne,
-  keAkhir, LEVELS, fixRepeatSlot, toolboxDari, namaFungsi, ukuranBoard,
+  keAkhir, LEVELS, fixRepeatSlot, toolboxDari, namaFungsi, ukuranBoard, invalidateRun,
   get lvl() { return lvlIdx; }, get hasil() { return hasil; }, get trace() { return trace; },
-  get kecepatan() { return kecepatan(); },
+  get kecepatan() { return kecepatan(); }, get running() { return running; },
   selfTest: () => EN.selfChecks()
 };
 </script>
