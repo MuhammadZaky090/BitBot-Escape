@@ -53,6 +53,7 @@
     --z-overlay: 99999;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-ui); }
+  html, body { overflow-x: hidden; max-width: 100vw; }
   body { background: var(--bg); color: var(--ink); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 18px; }
   
   /* Header & Branding Game */
@@ -667,17 +668,22 @@ function simpanWorkspace(idx) {
 // Muat kembali workspace tersimpan untuk level tertentu
 function muatWorkspace(idx) {
   const lv = LEVELS[idx], isCode = lv.mode === "code";
+  let savedCode = null, savedBlocks = null;
+  try {
+    savedCode = localStorage.getItem("bitbot_ws_code_" + idx);
+    savedBlocks = localStorage.getItem("bitbot_ws_blocks_" + idx);
+  } catch (e) {
+    // Abaikan jika penyimpanan lokal (localStorage) diblokir
+  }
   if (isCode) {
     const codeEl = document.getElementById("code");
-    const saved = localStorage.getItem("bitbot_ws_code_" + idx);
-    codeEl.value = (saved !== null) ? saved : (lv.template || "");
+    codeEl.value = (savedCode !== null) ? savedCode : (lv.template || "");
     codeEl.placeholder = lv.placeholder || "# Tulis kode Python-mu di sini";
   } else if (ws) {
     ws.clear();
-    const saved = localStorage.getItem("bitbot_ws_blocks_" + idx);
-    if (saved) {
+    if (savedBlocks) {
       try {
-        Blockly.serialization.workspaces.load(JSON.parse(saved), ws);
+        Blockly.serialization.workspaces.load(JSON.parse(savedBlocks), ws);
       } catch (err) {
         ws.clear();
       }
