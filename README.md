@@ -5,60 +5,40 @@ Game edukasi **tanpa file gambar/suara**: papan petak digambar dengan Canvas (ve
 ## Struktur Folder
 
 ```
-├── frontend/          # File web (served by Apache/Nginx)
-│   ├── index.html    # UI + Blockly + generator blok->Python + Canvas board
-│   ├── engine.js     # Engine: parser, interpreter, scoring, level data
-│   ├── lib/          # Third-party libraries
+├── docs/               # Game files (served by GitHub Pages / web server)
+│   ├── index.html      # UI + Blockly + generator blok->Python + Canvas board
+│   ├── engine.js       # Engine: parser, interpreter, scoring, level data
+│   ├── lib/            # Third-party libraries
 │   │   └── blockly.min.js
-│   ├── admin.php     # Dashboard untuk melihat data siswa
-│   ├── export.php    # Export CSV
-│   └── .htaccess     # Security & redirects
-├── backend/           # Server-side code (protected)
+│   └── .htaccess       # Security & redirects
+├── backend/            # Server-side code (for PHP hosting)
 │   ├── api/
-│   │   ├── health.php
-│   │   └── submit.php
-│   ├── config.php    # Database configuration
-│   └── schema.sql    # Database schema
-├── tests/
-│   ├── engine.test.js
-│   ├── ui.smoke.test.js
-│   ├── fuzz.engine.test.js
-│   ├── failure.injection.test.js
-│   └── monkey.ui.test.js
-└── docs/
-    ├── FIELD_CHECKLIST.md
-    └── STRESS_REPORT.md
+│   │   ├── health.php  # Health check endpoint
+│   │   └── submit.php  # Submit attempts endpoint
+│   ├── config.php      # Database configuration
+│   └── schema.sql      # Database schema
+├── tests/              # Test files
+└── README.md
 ```
 
-## Menjalankan (Offline/Demo)
+## Demo (GitHub Pages)
 
-Buka `frontend/index.html` langsung di browser — tanpa server, tanpa internet, tanpa `npm install`.
+Buka https://[username].github.io/[repo]/docs/
 
-## Menjalankan (Dengan Server + Telemetry)
+Game berjalan offline tanpa server.
 
-1. Salin `backend/config.php` ke lokasi yang aman (di luar document root)
-2. Buat database MySQL dan import `backend/schema.sql`
-3. Konfigurasi web server:
+## Menjalankan Lokal
 
-### Apache (document root → frontend/)
+Buka `docs/index.html` langsung di browser — tanpa server, tanpa internet, tanpa `npm install`.
 
-```apache
-DocumentRoot /path/to/bitbot-escape/frontend
-<Directory /path/to/bitbot-escape/frontend>
-    AllowOverride All
-    Require all granted
-</Directory>
+## Menjalankan Dengan Server + Telemetry
 
-# Lindungi backend dari akses langsung
-<Directory /path/to/bitbot-escape/backend>
-    Require all denied
-</Directory>
-```
-
-### Atau gunakan PHP built-in server (development)
+1. Buat database MySQL dan import `backend/schema.sql`
+2. Konfigurasi `backend/config.php` dengan kredensial database
+3. Jalankan dengan PHP built-in server:
 
 ```bash
-cd frontend
+cd docs
 php -S localhost:8000
 # Buka http://localhost:8000
 ```
