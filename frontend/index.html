@@ -91,7 +91,6 @@
   .grade-cakap { background: rgba(58, 123, 213, 0.25); color: var(--info-soft); border: 1px solid var(--info); }
   .grade-dasar { background: rgba(213, 128, 58, 0.25); color: var(--brand); border: 1px solid var(--brand); }
   .grade-bimbingan { background: rgba(255, 107, 107, 0.25); color: var(--danger); border: 1px solid var(--danger); }
-  
   .status-val { font-size: 14.5px; color: var(--p-blue-300); }
   #bonus.on { color: var(--brand); font-weight: 600; }
   .quota-over { color: var(--danger) !important; font-weight: bold; }
@@ -231,6 +230,70 @@
   #overlay button { background: var(--success); color: var(--ink); border: none; border-radius: var(--r-sm); padding: 10px 22px; font-size: var(--fs-md); cursor: pointer; margin: 0 4px; transition: filter var(--t-fast); }
   #overlay button:hover { filter: brightness(1.12); }
   #appFooter { text-align: center; font-size: 11.5px; color: var(--ink-faint); margin: 18px auto 8px; letter-spacing: 0.3px; }
+
+  /* Telemetry status indicator */
+  .tele-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--ink-dim);
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: var(--surface-sunken);
+    min-width: 80px;
+    justify-content: center;
+  }
+  .tele-status::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ink-faint);
+  }
+  .tele-status.sending { color: var(--info-soft); }
+  .tele-status.sending::before { background: var(--info); animation: pulse 1s infinite; }
+  .tele-status.ok { color: var(--success-text); }
+  .tele-status.ok::before { background: var(--success); }
+  .tele-status.offline { color: var(--brand); }
+  .tele-status.offline::before { background: var(--brand); }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* Student Identity Modal */
+#studentModal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-overlay);
+}
+  .speedrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .speedrow label {
+    font-size: var(--fs-sm);
+    color: var(--ink-dim);
+  }
+  .speedrow select {
+    background: var(--surface-sunken);
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    padding: 6px 10px;
+    color: var(--ink);
+    font-size: var(--fs-sm);
+  }
+  .speedrow .cbtn {
+    padding: 6px 12px;
+    font-size: var(--fs-sm);
+  }
 </style>
 </head>
 <body>
@@ -290,7 +353,7 @@
         <option value="0">Langsung</option>
       </select>
       <button class="cbtn c-end" id="btnEnd">Ke akhir</button>
-      <button class="cbtn c-export" id="btnExport" title="Ekspor data percobaan ke format CSV">📥 Ekspor CSV</button>
+      <span id="telemetryStatus" class="tele-status" title="Status pengiriman data"></span>
     </div>
     <div class="box" id="msg" aria-live="polite"></div>
   </div>
@@ -333,6 +396,26 @@
   <button id="ovNext">Lanjut →</button>
 </div></div>
 
+<!-- Student Identity Modal -->
+<div id="studentModal" role="dialog" aria-modal="true" aria-labelledby="studentModalTitle">
+  <div class="card" style="max-width: 380px;">
+    <div style="font-size: 36px; margin-bottom: 12px;">🎓</div>
+    <h2 id="studentModalTitle" style="margin-bottom: 12px;">Identitas Siswa</h2>
+    <p style="color: var(--ink-soft); margin-bottom: 16px; line-height: 1.5;">
+      Masukkan kode siswa Anda untuk menyimpan progress.<br>
+      <small style="color: var(--ink-faint);">Kode diberikan oleh guru Anda.</small>
+    </p>
+    <input type="text" id="studentCodeInput" placeholder="Contoh: X-TKJ1-07"
+           style="width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px;
+                  background: var(--surface-sunken); color: var(--ink); font-size: 15px;
+                  text-transform: uppercase; box-sizing: border-box; margin-bottom: 12px;" />
+    <button id="btnSubmitStudent" style="width: 100%; padding: 12px; background: var(--success);
+            color: var(--ink); border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;">
+      Mulai Bermain
+    </button>
+  </div>
+</div>
+
 <script>
 'use strict';
 // Pengaman dependensi: cegah halaman gagal tanpa pesan bila berkas tidak lengkap
@@ -344,6 +427,177 @@ if (typeof LBEngine === "undefined" || typeof Blockly === "undefined") {
 // CATATAN: nama global dari engine.js (LEVELS, ERR, compilePython, countStatements, evaluateProgram,
 // varian, STEP_CAP, DIRS, ...) dipakai langsung di sini — tidak boleh dideklarasikan ulang.
 const EN = LBEngine;
+
+// ============ TELEMETRY: Auto-submit to server ============
+
+// Cek apakah student code sudah ada
+let _studentCode = sessionStorage.getItem('bitbot_student');
+let _studentModalShown = false;
+
+// Tampilkan modal identitas siswa
+function showStudentModal() {
+  if (_studentCode || _studentModalShown) return;
+  _studentModalShown = true;
+  const modal = document.getElementById('studentModal');
+  const input = document.getElementById('studentCodeInput');
+  const btn = document.getElementById('btnSubmitStudent');
+
+  modal.style.display = 'flex';
+  input.value = '';
+  input.focus();
+
+  // Enter key submit
+  const onKeydown = (e) => {
+    if (e.key === 'Enter') submitStudent();
+  };
+  input.addEventListener('keydown', onKeydown);
+
+  // Button submit
+  btn.onclick = submitStudent;
+
+  function submitStudent() {
+    let code = input.value.trim().toUpperCase();
+    if (!code) {
+      input.style.borderColor = 'var(--danger)';
+      return;
+    }
+    input.style.borderColor = '';
+    _studentCode = code;
+    sessionStorage.setItem('bitbot_student', code);
+    modal.style.display = 'none';
+    input.removeEventListener('keydown', onKeydown);
+    updateTelemetryStatus();
+  }
+}
+
+// Update telemetry status indicator
+function updateTelemetryStatus() {
+  const el = document.getElementById('telemetryStatus');
+  if (!el) return;
+
+  const pending = JSON.parse(localStorage.getItem('bitbot_pending') || '[]').length;
+
+  if (!_studentCode) {
+    el.textContent = 'Belum login';
+    el.className = 'tele-status';
+  } else if (pending > 0) {
+    el.textContent = `⏳ ${pending} pending`;
+    el.className = 'tele-status offline';
+  } else {
+    el.textContent = '✓ Terkirim';
+    el.className = 'tele-status ok';
+  }
+}
+
+// Dapatkan atau buat session ID unik untuk browser ini.
+function getSessionId() {
+  let sid = sessionStorage.getItem('bitbot_session');
+  if (!sid) {
+    sid = crypto.randomUUID();
+    sessionStorage.setItem('bitbot_session', sid);
+  }
+  return sid;
+}
+
+// Auto-submit percobaan ke server (API Option A).
+// Jika server tidak tersedia, simpan ke localStorage untuk retry nanti.
+async function kirimKeServer(r) {
+  // Tampilkan status sending
+  const el = document.getElementById('telemetryStatus');
+  if (el) {
+    el.textContent = 'Mengirim...';
+    el.className = 'tele-status sending';
+  }
+
+  const lv = L();
+  let srcCode = "";
+  try { srcCode = sumberKode().code || ""; } catch(e) { srcCode = ""; }
+
+  // Deteksi browser
+  const ua = navigator.userAgent;
+  let browser = 'Other';
+  if (ua.includes('Firefox')) browser = 'Firefox';
+  else if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome';
+  else if (ua.includes('Edg')) browser = 'Edge';
+  else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
+
+  const record = {
+    id: crypto.randomUUID(),
+    student_code: _studentCode || 'ANONIM',
+    session_id: getSessionId(),
+    level: lvlIdx + 1,
+    attempt_no: 1,
+    result: r.ok ? 'win' : 'fail',
+    error_type: r.jenis || null,
+    cost: r.cost || biayaSaatIni(),
+    steps: r.steps || 0,
+    hints_used: hintsShown || 0,
+    score: r.score || 0,
+    stars: r.stars || 0,
+    duration_ms: Date.now() - (window._bitbotStartTime || Date.now()),
+    client_ts: new Date().toISOString(),
+    build_version: '0.3.1',
+    program_src: btoa(unescape(encodeURIComponent(srcCode))),
+    browser_family: browser
+  };
+
+  // Selalu simpan ke localStorage sebagai backup
+  try {
+    const key = 'bitbot_pending';
+    const pending = JSON.parse(localStorage.getItem(key) || '[]');
+    pending.push({ ...record, submitted_at: new Date().toISOString() });
+    localStorage.setItem(key, JSON.stringify(pending));
+  } catch(e) {}
+
+  // Coba kirim ke server
+  try {
+    const resp = await fetch('/api/submit.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ records: [record] })
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.accepted && data.accepted.length > 0) {
+        // Hapus dari pending jika berhasil
+        try {
+          const key = 'bitbot_pending';
+          const pending = JSON.parse(localStorage.getItem(key) || '[]');
+          const filtered = pending.filter(p => p.id !== record.id);
+          localStorage.setItem(key, JSON.stringify(filtered));
+        } catch(e) {}
+      }
+    }
+    updateTelemetryStatus();
+  } catch(e) {
+    // Server tidak tersedia - data tersimpan di localStorage, akan dicoba lagi lain waktu
+    updateTelemetryStatus();
+  }
+}
+
+// Retry semua data yang pending di localStorage.
+async function retryPendingTelemetry() {
+  try {
+    const key = 'bitbot_pending';
+    const pending = JSON.parse(localStorage.getItem(key) || '[]');
+    if (pending.length === 0) return;
+
+    // Kirim semua sekaligus (max 20 per batch)
+    const batch = pending.slice(0, 20);
+    const resp = await fetch('/api/submit.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ records: batch })
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      const acceptedIds = new Set(data.accepted || []);
+      const remaining = pending.filter(p => !acceptedIds.has(p.id));
+      localStorage.setItem(key, JSON.stringify(remaining));
+      console.log('✓ Retry: sent', acceptedIds.size, ', remaining:', remaining.length);
+    }
+  } catch(e) {}
+}
 
 // Tema Canvas dibaca dari CSS custom properties — satu sumber kebenaran dengan stylesheet.
 // Warna kategori blok diambil dari TEMA (engine.js) supaya tema Blockly & blok pakai nilai yang sama.
@@ -863,6 +1117,7 @@ function loadLevel(i) {
 // ============ EKSEKUSI ============
 // Kompilasi + jalankan SEMUA varian lewat engine. Return false kalau program belum sah.
 function prepare() {
+  window._bitbotStartTime = Date.now(); // Reset timer saat mulai jalankan
   const lv = L();
   hapusSorotYatim();
   invalidateRun();
@@ -960,6 +1215,8 @@ function selesaikan() {
     levelCrashes[lvlIdx] = (levelCrashes[lvlIdx] || 0) + 1;
   }
   catatPercobaan(r);
+  // Kirim ke server secara otomatis
+  kirimKeServer(r);
   if (r.ok) { finish(r); return false; }
   setMsg("❌ " + pesanGagal(r), "err");
   return false;
@@ -1252,6 +1509,20 @@ function fixRepeatSlot(b) {
 
 loadLevel(0);
 
+// Catat waktu mulai untuk durasi attempt
+window._bitbotStartTime = Date.now();
+
+// Tampilkan modal identitas siswa jika belum ada
+showStudentModal();
+
+// Update status telemetry saat load
+updateTelemetryStatus();
+
+// Retry data yang pending saat halaman dimuat (misal: sebelumnya offline)
+window.addEventListener('load', () => {
+  setTimeout(retryPendingTelemetry, 2000); // tunggu 2 detik agar koneksi stabil
+});
+
 // ============ TAMPILAN ADAPTIF MULTI-PERANGKAT ============
 // Sesuaikan ukuran SVG Blockly secara dinamis saat orientasi atau resolusi layar berubah
 window.addEventListener("resize", () => {
@@ -1287,10 +1558,6 @@ document.getElementById("btnHint").onclick = () => {
   btn.textContent = "💡 Petunjuk (" + hintsShown + "/" + lv.hints.length + ")";
   if (hintsShown >= lv.hints.length) btn.disabled = true;
 };
-
-// Tombol Ekspor CSV riwayat pengerjaan siswa untuk instrumen penelitian
-const btnExp = document.getElementById("btnExport");
-if (btnExp) btnExp.onclick = eksporLogCSV;
 
 // ============ TITIK MASUK UJI (hanya saat halaman dibuka dengan ?debug) ============
 if (/[?&]debug/.test(location.search)) window.LB = {
