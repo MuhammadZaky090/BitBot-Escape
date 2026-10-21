@@ -409,3 +409,17 @@ test("Blockly dijalankan tanpa suara, media tetap lokal", () => {
   assert.ok(/media:\s*"lib\/media\/"/.test(html),
     "media harus prefix lokal — tanpa media, Blockly jatuh ke host demo resmi");
 });
+
+test("efek suara aplikasi disintesis (tanpa berkas audio)", () => {
+  const fs = require("node:fs"), p = require("node:path");
+  const html = fs.readFileSync(p.join(__dirname, "..", "index.html"), "utf8");
+  // Bunyi dibangkitkan oscillator WebAudio, bukan berkas yang dimuat.
+  assert.ok(/AudioContext/.test(html), "efek suara harus memakai WebAudio");
+  assert.ok(/createOscillator/.test(html), "efek suara harus membangkitkan oscillator");
+  // Semua efek yang diharapkan tersedia.
+  ["snap", "buat", "hapus", "lepas", "klik", "langkah", "jalan", "menang", "gagal"]
+    .forEach(n => assert.ok(new RegExp("\\b" + n + "\\s*:").test(html), "efek suara '" + n + "' hilang"));
+  // Tombol pengatur suara ada dan menyimpan pilihan.
+  assert.ok(/id="btnSfx"/.test(html), "tombol matikan/nyakan efek suara wajib ada");
+  assert.ok(/bitbot_sfx/.test(html), "pilihan efek suara harus disimpan di localStorage");
+});

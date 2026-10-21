@@ -207,6 +207,7 @@
   .cbtn:hover:not(:disabled) { filter: brightness(1.12); }
   .c-run { background: var(--success); } .c-step { background: var(--info); } .c-reset { background: var(--neutral-btn); }
   .c-end { background: var(--neutral-btn); } .c-export { background: var(--p-navy-700); }
+  .c-sfx { background: var(--neutral-btn); min-width: 44px; }
   .cbtn:disabled { opacity: .4; cursor: not-allowed; }
   #msg.err { color: var(--danger); } #msg.ok { color: var(--success-text); }
   #msg { min-height: 22px; line-height: 1.5; }
@@ -353,6 +354,7 @@
         <option value="0">Langsung</option>
       </select>
       <button class="cbtn c-end" id="btnEnd">Ke akhir</button>
+      <button class="cbtn c-sfx" id="btnSfx" aria-pressed="true" aria-label="Efek suara">🔊</button>
       <span id="telemetryStatus" class="tele-status" title="Status pengiriman data"></span>
     </div>
     <div class="box" id="msg" aria-live="polite"></div>
@@ -428,7 +430,119 @@ if (typeof LBEngine === "undefined" || typeof Blockly === "undefined") {
 // varian, STEP_CAP, DIRS, ...) dipakai langsung di sini — tidak boleh dideklarasikan ulang.
 const EN = LBEngine;
 
+// ============ EFEK SUARA: SINTESIS WEBAUDIO (TANPA BERKAS AUDIO) ============
+// Semua bunyi dibangkitkan oleh oscillator WebAudio saat dipanggil — tidak ada berkas
+// suara yang dimuat, sehingga aturan "tanpa berkas gambar/suara" tetap berlaku.
+// Blockly sendiri tetap bisu (sounds: false); bunyi di bawah dibuat sendiri oleh aplikasi.
+const SFX = (() => {
+  const KUNCI = "bitbot_sfx";
+  let ctx = null;
+  // localStorage bisa dinonaktifkan (mode privasi/izi) — jangan sampai halaman gagal.
+  let nyala = true;
+  try { nyala = localStorage.getItem(KUNCI) !== "0"; } catch (e) { nyala = true; }
+  // Suara hanya boleh berbunyi setelah interaksi pengguna (kebijakan autoplay peramban).
+  let interaksi = false;
+  // Saat program memuat/menjalankan level, bunyi blok dimatikan sementara.
+  let diam = false;
+
+  const siapkan = () => {
+    if (!nyala) return null;
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      try { ctx = new AC(); } catch (e) { return null; }
+    }
+    if (ctx.state === "suspended" && interaksi) ctx.resume().catch(() => {});
+    return ctx;
+  };
+
+  // Satu nada: oscillator + gain dengan amplop(linkungan) halus.
+  const nada = (f, durMs, bentuk, vol, tunda) => {
+    const ac = siapkan();
+    if (!ac) return;
+    const t0 = ac.currentTime + (tunda || 0);
+    const dur = durMs / 1000;
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    osc.type = bentuk || "sine";
+    osc.frequency.setValueAtTime(f, t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol || 0.05, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g).connect(ac.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.03);
+  };
+
+  // Nada yang melodicih dari satu frekuensi ke frekuensi lain (bunyi snap).
+  const geser = (dari, ke, durMs, bentuk, vol) => {
+    const ac = siapkan();
+    if (!ac) return;
+    const t0 = ac.currentTime;
+    const dur = durMs / 1000;
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    osc.type = bentuk || "sine";
+    osc.frequency.setValueAtTime(dari, t0);
+    osc.frequency.exponentialRampToValueAtTime(ke, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol || 0.05, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g).connect(ac.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.03);
+  };
+
+  // Bunyi Blockly + tombol + hasil level.
+  const PETA = {
+    snap:    () => geser(620, 980, 70, "square", 0.045),      // blok menempel
+    buat:    () => nada(520, 45, "triangle", 0.045),           // blok baru dibuat
+    hapus:   () => geser(320, 170, 90, "sawtooth", 0.035),    // blok dihapus
+    lepas:   () => nada(250, 40, "sine", 0.025),              // blok dilepas
+    klik:    () => nada(880, 25, "sine", 0.035),              // tombol biasa
+    langkah: () => nada(1200, 20, "sine", 0.025),             // satu langkah program
+    jalan:   () => { nada(523, 80, "triangle", 0.05, 0);       // mulai menjalankan
+                     nada(659, 80, "triangle", 0.05, 0.09);
+                     nada(784, 110, "triangle", 0.05, 0.18); },
+    menang:  () => { nada(523, 120, "triangle", 0.05, 0);      // level selesai
+                     nada(659, 120, "triangle", 0.05, 0.11);
+                     nada(784, 120, "triangle", 0.05, 0.22);
+                     nada(1046, 220, "triangle", 0.05, 0.33); },
+    gagal:   () => nada(196, 200, "square", 0.045)            // program salah / menabrak
+  };
+
+  return {
+    // Bunyikan efek tertentu; diabaikan bila suara dimatikan atau belum ada interaksi.
+    mainkan: (nama) => {
+      if (!nyala || !interaksi || diam) return;
+      const f = PETA[nama];
+      if (f) f();
+    },
+    // Senapkan/dinyalkan bunyi (dipakai saat memuat level atau workspace).
+    senja: (v) => { diam = !!v; },
+    // Saklar: kembalikan status suara dan simpan pilihan pemain.
+    saklar: () => {
+      nyala = !nyala;
+      try { localStorage.setItem(KUNCI, nyala ? "1" : "0"); } catch (e) {}
+      return nyala;
+    },
+    nyala: () => nyala,
+    // Dipanggil pada interaksi pertama pengguna: context audio baru boleh dibuat/diaktifkan.
+    siapkan: () => { interaksi = true; siapkan(); }
+  };
+})();
+
+// Tandai interaksi pertama pengguna: dari saat ini bunyi boleh berbunyi.
+["pointerdown", "keydown"].forEach(ev =>
+  document.addEventListener(ev, () => SFX.siapkan(), { once: true })
+);
+
 // ============ TELEMETRY: Auto-submit to server ============
+
+// Telemetry hanya aktif bila halaman disajikan lewat HTTP(S) (ada server API).
+// Saat game dibuka langsung dari berkas (protokol file:) tidak ada endpoint, jadi
+// modal identitas siswa dan pengiriman data dilewati sepenuhnya.
+const TELEMETRI_AKTIF = /^https?:$/.test(location.protocol);
 
 // Cek apakah student code sudah ada
 let _studentCode = sessionStorage.getItem('bitbot_student');
@@ -436,6 +550,7 @@ let _studentModalShown = false;
 
 // Tampilkan modal identitas siswa
 function showStudentModal() {
+  if (!TELEMETRI_AKTIF) return;   // tanpa server tidak ada yang menerima kode siswa
   if (_studentCode || _studentModalShown) return;
   _studentModalShown = true;
   const modal = document.getElementById('studentModal');
@@ -475,7 +590,10 @@ function updateTelemetryStatus() {
   const el = document.getElementById('telemetryStatus');
   if (!el) return;
 
-  const pending = JSON.parse(localStorage.getItem('bitbot_pending') || '[]').length;
+  const pending = (() => {
+    try { return JSON.parse(localStorage.getItem('bitbot_pending') || '[]').length; }
+    catch (e) { return 0; }   // localStorage bisa dinonaktifkan
+  })();
 
   if (!_studentCode) {
     el.textContent = 'Belum login';
@@ -549,7 +667,8 @@ async function kirimKeServer(r) {
     localStorage.setItem(key, JSON.stringify(pending));
   } catch(e) {}
 
-  // Coba kirim ke server
+  // Coba kirim ke server (hanya bila ada endpoint HTTP).
+  if (!TELEMETRI_AKTIF) { updateTelemetryStatus(); return; }
   try {
     const resp = await fetch('/api/submit.php', {
       method: 'POST',
@@ -577,6 +696,7 @@ async function kirimKeServer(r) {
 
 // Retry semua data yang pending di localStorage.
 async function retryPendingTelemetry() {
+  if (!TELEMETRI_AKTIF) return;
   try {
     const key = 'bitbot_pending';
     const pending = JSON.parse(localStorage.getItem(key) || '[]');
@@ -1078,6 +1198,7 @@ function melewatiKuota() {
 // ============ LEVEL BAR & MUAT LEVEL ============
 // Muat level ke-i dan reset seluruh tampilan.
 function loadLevel(i) {
+  SFX.senja(true);            // bunyi blok dimatikan selama level dimuat
   if (ws || document.getElementById("code")) {
     simpanWorkspace(lvlIdx);
   }
@@ -1112,6 +1233,7 @@ function loadLevel(i) {
   setMsg("", ""); hideOverlay();
   renderAll();
   if (!isCode && ws) setTimeout(() => Blockly.svgResize(ws), 30);
+  SFX.senja(false);
 }
 
 // ============ EKSEKUSI ============
@@ -1215,6 +1337,8 @@ function selesaikan() {
     levelCrashes[lvlIdx] = (levelCrashes[lvlIdx] || 0) + 1;
   }
   catatPercobaan(r);
+  // Bunyi hasil: menang atau program salah.
+  SFX.mainkan(r.ok ? "menang" : "gagal");
   // Kirim ke server secara otomatis
   kirimKeServer(r);
   if (r.ok) { finish(r); return false; }
@@ -1247,6 +1371,7 @@ document.getElementById("btnRun").onclick = () => {
   if (finished || melewatiKuota()) return;
   stop();
   if (!prepare()) return;
+  SFX.mainkan("jalan");
   // Loop tak berujung menghasilkan trace sampai STEP_CAP — tidak masuk akal dianimasi per langkah.
   if (hasil.jenis === ERR.LOOP_TAK_BERUNJUNG || kecepatan() === 0) { keAkhir(); return; }
   running = true; kunciEditing(true); setMsg("Mengompilasi & menjalankan…", "");
@@ -1257,6 +1382,7 @@ document.getElementById("btnRun").onclick = () => {
 document.getElementById("btnStep").onclick = () => {
   if (finished || melewatiKuota()) return;
   if (!trace || !hasil) { if (!prepare()) return; setMsg("Mode langkah: tekan lagi untuk maju 1 perintah.", ""); return; }
+  SFX.mainkan("langkah");
   stop();
   if (!advanceOne()) trace = null;
 };
@@ -1282,6 +1408,24 @@ document.getElementById("btnEnd").onclick = () => {
 document.getElementById("btnReset").onclick = () => {
   stop(); hasil = null; trace = null; traceIdx = 0; sorotBaris(null); resetSimState(); setMsg("", "");
 };
+
+// ============ EFEK SUARA: TOMBOL PENGATUR ============
+// Tombol matikan/nyakan: pilihan disimpan di localStorage sehingga bertahan saat F5.
+const btnSfx = document.getElementById("btnSfx");
+function segarkanTombolSfx() {
+  const nyala = SFX.nyala();
+  btnSfx.textContent = nyala ? "🔊" : "🔇";
+  btnSfx.setAttribute("aria-pressed", String(nyala));
+  btnSfx.title = nyala ? "Matikan efek suara" : "Nyalakan efek suara";
+}
+segarkanTombolSfx();
+btnSfx.onclick = () => { SFX.saklar(); segarkanTombolSfx(); SFX.mainkan("klik"); };
+
+// Bunyi ringkas saat tombol lain ditekan (Jalankan punya bunyi sendiri).
+document.querySelectorAll(".cbtn").forEach(b => {
+  if (b.id === "btnSfx" || b.id === "btnRun") return;
+  b.addEventListener("click", () => SFX.mainkan("klik"));
+});
 
 // Kembalikan robot dan item ke keadaan awal peta aktif.
 function resetSimState() {
@@ -1485,6 +1629,13 @@ ws.addChangeListener(e => {
   if (e.type === Blockly.Events.BLOCK_CREATE && e.blockId) {
     const b = ws.getBlockById(e.blockId);
     if (b && b.type === "lb_repeat") fixRepeatSlot(b);
+    SFX.mainkan("buat");
+  } else if (e.type === Blockly.Events.BLOCK_DELETE) {
+    SFX.mainkan("hapus");
+  } else if (e.type === Blockly.Events.BLOCK_MOVE) {
+    // Blok yang baru tersambung ke koneksi lain → bunyi snap.
+    if (e.newConnection && e.oldConnection !== e.newConnection) SFX.mainkan("snap");
+    else if (!e.newConnection && e.oldConnection) SFX.mainkan("lepas");
   }
   if (e.type === Blockly.Events.BLOCK_CHANGE || e.type === Blockly.Events.BLOCK_CREATE ||
       e.type === Blockly.Events.BLOCK_DELETE || e.type === Blockly.Events.BLOCK_MOVE) {
