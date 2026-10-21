@@ -217,8 +217,9 @@
   .blocklyTreeLabel { font-size: var(--fs-md) !important; }
   /* Baris kategori terpilih memakai warna kategori sebagai latar: pakai tinta gelap. */
   .blocklyTreeSelected .blocklyTreeLabel { color: var(--p-navy-950) !important; }
-  /* ===== EDISI TANPA ASET: netralkan semua aturan CSS Blockly yang merujuk file =====
-     Tanpa ini browser akan meminta sprite toolbox dan file kursor dari folder media. */
+  /* ===== TANPA ASET GAMBAR: netralkan semua aturan CSS Blockly yang merujuk file =====
+     Tanpa ini browser akan meminta sprite toolbox dan file kursor dari folder media.
+     Efek suara memakai berkas WAV sendiri di sounds/ (bukan media Blockly). */
   .blocklyTreeIcon { background-image: none !important; display: none !important; }
   .blocklyToolboxDelete, .blocklyDragging.blocklyDraggingDelete,
   .blocklyToolboxDelete .blocklyTreeLabel { cursor: not-allowed !important; }
@@ -430,94 +431,54 @@ if (typeof LBEngine === "undefined" || typeof Blockly === "undefined") {
 // varian, STEP_CAP, DIRS, ...) dipakai langsung di sini — tidak boleh dideklarasikan ulang.
 const EN = LBEngine;
 
-// ============ EFEK SUARA: SINTESIS WEBAUDIO (TANPA BERKAS AUDIO) ============
-// Semua bunyi dibangkitkan oleh oscillator WebAudio saat dipanggil — tidak ada berkas
-// suara yang dimuat, sehingga aturan "tanpa berkas gambar/suara" tetap berlaku.
-// Blockly sendiri tetap bisu (sounds: false); bunyi di bawah dibuat sendiri oleh aplikasi.
+// ============ EFEK SUARA: BERKAS WAV LOKAL ============
+// Bunyi diambil dari folder sounds/ (berkas WAV mono hasil sintesis, dibuat oleh
+// tools/generate-sounds.js). Blockly sendiri tetap bisu (sounds: false) supaya
+// Blockly tidak pernah meminta berkas media dari host luar.
 const SFX = (() => {
   const KUNCI = "bitbot_sfx";
-  let ctx = null;
+  // Nama efek internal -> berkas WAV.
+  const BERKAS = {
+    snap:    "sounds/snap.wav",     // blok tersambung ke koneksi lain
+    buat:    "sounds/create.wav",   // blok baru dibuat
+    hapus:   "sounds/delete.wav",   // blok dihapus
+    lepas:   "sounds/detach.wav",   // blok dilepas dari koneksi
+    klik:    "sounds/click.wav",    // tombol ditekan
+    langkah: "sounds/step.wav",     // maju satu perintah
+    jalan:   "sounds/run.wav",      // program dijalankan
+    menang:  "sounds/win.wav",      // level selesai
+    gagal:   "sounds/error.wav",    // program salah / menabrak
+    level:   "sounds/levelup.wav"   // pindah ke level berikutnya
+  };
   // localStorage bisa dinonaktifkan (mode privasi/izi) — jangan sampai halaman gagal.
   let nyala = true;
   try { nyala = localStorage.getItem(KUNCI) !== "0"; } catch (e) { nyala = true; }
   // Suara hanya boleh berbunyi setelah interaksi pengguna (kebijakan autoplay peramban).
   let interaksi = false;
-  // Saat program memuat/menjalankan level, bunyi blok dimatikan sementara.
+  // Saat program memuat level, bunyi blok dimatikan sementara.
   let diam = false;
+  // Dua elemen audio per efek agar bunyi yang tumpang tindih tidak saling memotong.
+  const cache = {};
 
-  const siapkan = () => {
-    if (!nyala) return null;
-    if (!ctx) {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return null;
-      try { ctx = new AC(); } catch (e) { return null; }
-    }
-    if (ctx.state === "suspended" && interaksi) ctx.resume().catch(() => {});
-    return ctx;
-  };
-
-  // Satu nada: oscillator + gain dengan amplop(linkungan) halus.
-  const nada = (f, durMs, bentuk, vol, tunda) => {
-    const ac = siapkan();
-    if (!ac) return;
-    const t0 = ac.currentTime + (tunda || 0);
-    const dur = durMs / 1000;
-    const osc = ac.createOscillator();
-    const g = ac.createGain();
-    osc.type = bentuk || "sine";
-    osc.frequency.setValueAtTime(f, t0);
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(vol || 0.05, t0 + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    osc.connect(g).connect(ac.destination);
-    osc.start(t0);
-    osc.stop(t0 + dur + 0.03);
-  };
-
-  // Nada yang melodicih dari satu frekuensi ke frekuensi lain (bunyi snap).
-  const geser = (dari, ke, durMs, bentuk, vol) => {
-    const ac = siapkan();
-    if (!ac) return;
-    const t0 = ac.currentTime;
-    const dur = durMs / 1000;
-    const osc = ac.createOscillator();
-    const g = ac.createGain();
-    osc.type = bentuk || "sine";
-    osc.frequency.setValueAtTime(dari, t0);
-    osc.frequency.exponentialRampToValueAtTime(ke, t0 + dur);
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(vol || 0.05, t0 + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    osc.connect(g).connect(ac.destination);
-    osc.start(t0);
-    osc.stop(t0 + dur + 0.03);
-  };
-
-  // Bunyi Blockly + tombol + hasil level.
-  const PETA = {
-    snap:    () => geser(620, 980, 70, "square", 0.045),      // blok menempel
-    buat:    () => nada(520, 45, "triangle", 0.045),           // blok baru dibuat
-    hapus:   () => geser(320, 170, 90, "sawtooth", 0.035),    // blok dihapus
-    lepas:   () => nada(250, 40, "sine", 0.025),              // blok dilepas
-    klik:    () => nada(880, 25, "sine", 0.035),              // tombol biasa
-    langkah: () => nada(1200, 20, "sine", 0.025),             // satu langkah program
-    jalan:   () => { nada(523, 80, "triangle", 0.05, 0);       // mulai menjalankan
-                     nada(659, 80, "triangle", 0.05, 0.09);
-                     nada(784, 110, "triangle", 0.05, 0.18); },
-    menang:  () => { nada(523, 120, "triangle", 0.05, 0);      // level selesai
-                     nada(659, 120, "triangle", 0.05, 0.11);
-                     nada(784, 120, "triangle", 0.05, 0.22);
-                     nada(1046, 220, "triangle", 0.05, 0.33); },
-    gagal:   () => nada(196, 200, "square", 0.045)            // program salah / menabrak
+  // Mainkan satu efek suara. Gagal (mis. berkas hilang) tidak boleh mengganggu game.
+  const bunyi = (nama) => {
+    if (!nyala || !interaksi || diam) return;
+    const src = BERKAS[nama];
+    if (!src) return;
+    try {
+      let pool = cache[nama];
+      if (!pool) pool = cache[nama] = [new Audio(src), new Audio(src)];
+      const a = pool.find(x => x.paused) || pool[0];
+      a.currentTime = 0;
+      a.volume = 0.7;
+      const p = a.play();
+      if (p && typeof p.catch === "function") p.catch(() => {});
+    } catch (e) {}
   };
 
   return {
     // Bunyikan efek tertentu; diabaikan bila suara dimatikan atau belum ada interaksi.
-    mainkan: (nama) => {
-      if (!nyala || !interaksi || diam) return;
-      const f = PETA[nama];
-      if (f) f();
-    },
+    mainkan: bunyi,
     // Senapkan/dinyalkan bunyi (dipakai saat memuat level atau workspace).
     senja: (v) => { diam = !!v; },
     // Saklar: kembalikan status suara dan simpan pilihan pemain.
@@ -527,8 +488,8 @@ const SFX = (() => {
       return nyala;
     },
     nyala: () => nyala,
-    // Dipanggil pada interaksi pertama pengguna: context audio baru boleh dibuat/diaktifkan.
-    siapkan: () => { interaksi = true; siapkan(); }
+    // Dipanggil pada interaksi pertama pengguna: setelah itu bunyi boleh berbunyi.
+    siapkan: () => { interaksi = true; }
   };
 })();
 
@@ -577,6 +538,7 @@ function showStudentModal() {
       return;
     }
     input.style.borderColor = '';
+    SFX.mainkan('klik');
     _studentCode = code;
     sessionStorage.setItem('bitbot_student', code);
     modal.style.display = 'none';
@@ -1605,19 +1567,21 @@ function hideOverlay() {
 
 // Tombol Coba Lagi: tutup dialog dan ulang level.
 document.getElementById("ovRetry").onclick = () => {
+  SFX.mainkan("klik");
   hideOverlay(); finished = false; hasil = null; trace = null; traceIdx = 0; petaIdx = 0;
   sorotBaris(null); resetSimState(); setMsg("", ""); renderHud();
 };
 
 // Tombol Lanjut: muat level berikutnya.
-document.getElementById("ovNext").onclick = () => loadLevel(lvlIdx + 1);
+document.getElementById("ovNext").onclick = () => { SFX.mainkan("level"); loadLevel(lvlIdx + 1); };
 
 // ============ INJEKSI BLOCKLY ============
 ws = Blockly.inject("blocklyDiv", {
   toolbox: { kind: "categoryToolbox", contents: [] },
   theme: TEMA_BLOCKLY,
-  // Edisi tanpa aset: suara dimatikan, dan `media` tetap lokal supaya tidak ada aturan CSS
-  // yang tertinggal meminta file ke host lain (semuanya sudah dinetralkan di <style> di atas).
+  // Suara bawaan Blockly dimatikan (efek suara aplikasi memakai berkas WAV di sounds/),
+  // dan `media` tetap lokal supaya tidak ada aturan CSS yang tertinggal meminta file
+  // ke host lain (semuanya sudah dinetralkan di <style> di atas).
   sounds: false, media: "lib/media/",
   trashcan: false, grid: { spacing: 16, length: 2, colour: THEME.wall, snap: true },
   zoom: { controls: false, wheel: true, startScale: 0.85, maxScale: 1.2, minScale: 0.6 },

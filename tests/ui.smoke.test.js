@@ -20,8 +20,11 @@ const SKIP = chromium ? false
   : "Playwright tidak terpasang — jalankan: npm i -D playwright && npx playwright install chromium";
 
 const HALAMAN = "file:///" + path.resolve(__dirname, "..", "index.html").replace(/\\/g, "/") + "?debug";
-// Satu-satunya file yang boleh dimuat halaman ini.
-const FILE_BAKU = ["index.html", "engine.js", "lib/blockly.min.js"];
+// File yang boleh dimuat halaman ini: 3 berkas inti + berkas suara lokal (sounds/*.wav).
+const FILE_BAKU = ["index.html", "engine.js", "lib/blockly.min.js",
+  "sounds/click.wav", "sounds/snap.wav", "sounds/create.wav", "sounds/delete.wav",
+  "sounds/detach.wav", "sounds/step.wav", "sounds/run.wav", "sounds/win.wav",
+  "sounds/error.wav", "sounds/levelup.wav"];
 
 /* Buka halaman, kumpulkan galat konsol + SEMUA permintaan (luar file:// dan file lokal). */
 async function buka(browser, viewport) {
@@ -62,7 +65,7 @@ test("halaman & satu kali jalan: nol galat konsol, nol permintaan eksternal", { 
   } finally { await Tutup(ctx); await browser.close(); }
 });
 
-test("hanya 3 file yang dimuat: tidak ada permintaan sprite, kursor, atau audio", { skip: SKIP }, async () => {
+test("hanya berkas yang diizinkan yang dimuat: tidak ada sprite, kursor, atau aset luar", { skip: SKIP }, async () => {
   const browser = await chromium.launch();
   const { ctx, page, lokal } = await buka(browser);
   try {
@@ -79,7 +82,7 @@ test("hanya 3 file yang dimuat: tidak ada permintaan sprite, kursor, atau audio"
     await page.locator("#btnRun").click();
     await page.waitForFunction("document.getElementById('overlay').style.display === 'flex'");
     const takDikenal = [...new Set(lokal)].filter(f => !FILE_BAKU.includes(f)).sort();
-    assert.deepStrictEqual(takDikenal, [], "permintaan file di luar 3 file: " + takDikenal.join(" | "));
+    assert.deepStrictEqual(takDikenal, [], "permintaan file di luar daftar yang diizinkan: " + takDikenal.join(" | "));
   } finally { await Tutup(ctx); await browser.close(); }
 });
 

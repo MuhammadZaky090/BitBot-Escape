@@ -385,40 +385,50 @@ test("warna TEMA sinkron dengan token CSS di index.html", () => {
   });
 });
 
-/* ==================== EDISI TANPA ASET: tidak boleh ada rujukan file gambar/suara ==================== */
-test("index.html tidak merujuk aset apa pun dan tidak memanggil CDN", () => {
+/* ==================== ASET: GAMBAR/FONT TIDAK BOLEH ADA, SUARA BOLEH (WAV LOKAL) ==================== */
+test("index.html tidak merujuk aset gambar/font dan tidak memanggil CDN", () => {
   const fs = require("node:fs"), p = require("node:path");
   const html = fs.readFileSync(p.join(__dirname, "..", "index.html"), "utf8");
   // Ekstensi aset (regex, bukan substring: 'cursor' bukan file '.cur'), plus rujukan jauh.
-  [/\.(png|jpe?g|gif|svg|webp)\b/i, /\bassets\b/, /new Image\(/i, /\bmp3\b|\bogg\b|\.wav\b/i,
+  // Catatan: berkas suara .wav di folder sounds/ BOLEH dipakai; gambar/font/kursor tidak.
+  [/\.(png|jpe?g|gif|svg|webp)\b/i, /\bassets\b/, /new Image\(/i, /\bmp3\b|\bogg\b/i,
    /woff2?\b/i, /https?:\/\//i, /url\(\s*['"]?[a-z]+:/i]
     .forEach(re => assert.ok(!re.test(html), "index.html masih memuat rujukan aset: " + re));
   // Aturan CSS Blockly yang meminta sprite toolbox / file kursor harus dinetralkan.
   ["blocklyTreeIcon", "blocklyToolboxDelete", "blocklyDraggingDelete", "blocklyMenuItemCheckbox"]
     .forEach(sel => assert.ok(html.includes(sel), "CSS netralisir hilang: ." + sel));
-  // Folder ini memang tidak boleh berisi aset.
+  // Folder ini memang tidak boleh berisi aset gambar/font.
   const root = p.join(__dirname, "..");
   const adaAset = fs.readdirSync(root, { recursive: true }).some(f =>
-    !f.includes("node_modules") && !f.includes(".git") && /\.(png|jpe?g|gif|svg|mp3|ogg|wav|cur|woff2?)$/i.test(f));
-  assert.equal(adaAset, false, "ditemukan file aset di folder BitBot Escape");
+    !f.includes("node_modules") && !f.includes(".git") && /\.(png|jpe?g|gif|svg|webp|mp3|ogg|cur|woff2?)$/i.test(f));
+  assert.equal(adaAset, false, "ditemukan file aset gambar/font di folder BitBot Escape");
 });
 
-test("Blockly dijalankan tanpa suara, media tetap lokal", () => {
+test("Blockly tetap bisu, media tetap lokal", () => {
   const html = require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "index.html"), "utf8");
-  assert.ok(/sounds:\s*false/.test(html), "opsi sounds: false wajib ada (mencegah permintaan audio)");
+  assert.ok(/sounds:\s*false/.test(html), "opsi sounds: false wajib ada (Blockly tidak boleh minta audio)");
   assert.ok(/media:\s*"lib\/media\/"/.test(html),
     "media harus prefix lokal — tanpa media, Blockly jatuh ke host demo resmi");
 });
 
-test("efek suara aplikasi disintesis (tanpa berkas audio)", () => {
+test("efek suara memakai berkas WAV lokal", () => {
   const fs = require("node:fs"), p = require("node:path");
-  const html = fs.readFileSync(p.join(__dirname, "..", "index.html"), "utf8");
-  // Bunyi dibangkitkan oscillator WebAudio, bukan berkas yang dimuat.
-  assert.ok(/AudioContext/.test(html), "efek suara harus memakai WebAudio");
-  assert.ok(/createOscillator/.test(html), "efek suara harus membangkitkan oscillator");
-  // Semua efek yang diharapkan tersedia.
-  ["snap", "buat", "hapus", "lepas", "klik", "langkah", "jalan", "menang", "gagal"]
-    .forEach(n => assert.ok(new RegExp("\\b" + n + "\\s*:").test(html), "efek suara '" + n + "' hilang"));
+  const root = p.join(__dirname, "..");
+  const html = fs.readFileSync(p.join(root, "index.html"), "utf8");
+  // Semua efek harus menunjuk berkas WAV di folder sounds/.
+  assert.ok(/sounds\/[a-z]+\.wav/.test(html), "index.html harus merujuk berkas WAV lokal");
+  ["click", "snap", "create", "delete", "detach", "step", "run", "win", "error", "levelup"]
+    .forEach(n => {
+      assert.ok(html.includes("sounds/" + n + ".wav"), "efek suara '" + n + "' tidak merujuk berkas WAV");
+      assert.ok(fs.existsSync(p.join(root, "sounds", n + ".wav")), "berkas suara " + n + ".wav hilang");
+    });
+  // Setiap berkas benar-benar WAV (RIFF/WAVE) yang tidak kosong.
+  fs.readdirSync(p.join(root, "sounds")).filter(f => f.endsWith(".wav")).forEach(f => {
+    const b = fs.readFileSync(p.join(root, "sounds", f));
+    assert.equal(b.toString("ascii", 0, 4), "RIFF", f + " bukan berkas RIFF");
+    assert.equal(b.toString("ascii", 8, 12), "WAVE", f + " bukan berkas WAVE");
+    assert.ok(b.length > 1000, f + " kosong");
+  });
   // Tombol pengatur suara ada dan menyimpan pilihan.
   assert.ok(/id="btnSfx"/.test(html), "tombol matikan/nyakan efek suara wajib ada");
   assert.ok(/bitbot_sfx/.test(html), "pilihan efek suara harus disimpan di localStorage");

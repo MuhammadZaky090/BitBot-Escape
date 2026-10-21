@@ -1,6 +1,7 @@
 # BitBot Escape
 
-Game edukasi **tanpa file gambar/suara**: papan petak digambar dengan Canvas (vektor dari token warna CSS).
+Game edukasi: papan petak digambar dengan Canvas (vektor dari token warna CSS, tanpa file
+gambar), suara memakai berkas WAV lokal di `sounds/`.
 
 ## Struktur Folder
 
@@ -9,6 +10,11 @@ Game edukasi **tanpa file gambar/suara**: papan petak digambar dengan Canvas (ve
 ├── engine.js           # Engine: parser, interpreter, scoring, level data
 ├── lib/                # Third-party libraries
 │   └── blockly.min.js
+├── sounds/             # Efek suara (WAV mono hasil sintesis, lokal)
+│   ├── click.wav  snap.wav  create.wav  delete.wav  detach.wav
+│   ├── step.wav   run.wav   win.wav    error.wav   levelup.wav
+├── tools/
+│   └── generate-sounds.js  # Membuat ulang berkas WAV di sounds/ (tanpa dependensi)
 ├── api/                # Endpoint telemetry (webroot = root repo)
 │   ├── submit.php      # Submit batch attempts
 │   └── health.php      # Health check
@@ -35,21 +41,31 @@ Buka `index.html` langsung di browser — tanpa server, tanpa internet, tanpa `n
 
 ## Efek Suara
 
-Bunyi dibuat **on the fly** dengan WebAudio (oscillator) — tidak ada berkas audio yang
-dimuat, sehingga aturan "tanpa berkas gambar/suara" tetap berlaku. Blockly sendiri tetap
-bisu (`sounds: false`); efek bunyi berasal dari aplikasi.
+Bunyi memakai **berkas WAV lokal** di `sounds/` — tidak ada permintaan ke luar jaringan.
+Blockly sendiri tetap bisu (`sounds: false`); semua bunyi berasal dari aplikasi.
 
-| Efek | Kapan |
-|------|-------|
+| Efek | Kapan berbunyi |
+|------|----------------|
 | `snap` | Blok tersambung ke koneksi lain |
-| `buat` / `hapus` / `lepas` | Blok dibuat, dihapus, atau dilepas |
-| `klik` | Tombol ditekan |
-| `jalan` | Program dijalankan |
-| `langkah` | Maju satu perintah |
-| `menang` / `gagal` | Level selesai / program salah |
+| `create` | Blok baru dibuat |
+| `delete` | Blok dihapus |
+| `detach` | Blok dilepas dari koneksi |
+| `click` | Tombol ditekan |
+| `step` | Maju satu perintah |
+| `run` | Program dijalankan |
+| `win` | Level selesai |
+| `error` | Program salah / menabrak |
+| `levelup` | Pindah ke level berikutnya |
 
 Tombol 🔊 di baris kontrol mematikan/menyalakan efek suara; pilihan disimpan di
-`localStorage`. Suara baru berbunyi setelah interaksi pertama (kebijakan autoplay peramban).
+`localStorage` (`bitbot_sfx`). Suara baru berbunyi setelah interaksi pertama (kebijakan
+autoplay peramban).
+
+Berkas WAV dibuat oleh skrip Node tanpa dependensi — ubah nadanya lalu jalankan ulang:
+
+```bash
+node tools/generate-sounds.js
+```
 
 ## Menjalankan Dengan Server + Telemetry
 
