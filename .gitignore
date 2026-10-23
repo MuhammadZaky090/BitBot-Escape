@@ -2,8 +2,9 @@ node_modules/
 package-lock.json
 
 # Backend config (keep config.sample.php but not actual config.php)
-# Uncomment if using config.php:
-# backend/config.php
+# config.php berisi kredensial database — JANGAN pernah di-commit.
+backend/config.php
+config.php
 
 # OS files
 .DS_Store

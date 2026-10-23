@@ -1,19 +1,19 @@
 # Laporan Pengujian Ketahanan & Stres (Stress Report)
-**BitBot Escape — Versi 0.3.1 (Build 2026.10.14)**  
+**BitBot Escape — Versi 0.4.0 (Build 2026.10.23)**  
 *Dipersiapkan untuk Uji Lapangan Penelitian Pembelajaran Berpikir Komputasional & Algoritma SMK Fase E*
 
 ---
 
 ## 1. Ringkasan Eksekutif & Tabel Kriteria Kelayakan
 
-Pengujian ketahanan (*hardening & stress testing*) dilakukan secara otomatis dan menyeluruh sebelum pelaksanaan uji coba lapangan di laboratorium komputer sekolah. Seluruh 77 pengujian pada suite `node --test` berhasil lolos 100% (*fully green*).
+Pengujian ketahanan (*hardening & stress testing*) dilakukan secara otomatis dan menyeluruh sebelum pelaksanaan uji coba lapangan di laboratorium komputer sekolah. Seluruh 78 pengujian pada suite `node --test` berhasil lolos 100% (*fully green*).
 
 | Kriteria Pengujian | Target Standar | Hasil Aktual | Status |
 | :--- | :--- | :--- | :---: |
 | **Engine Fuzzing** | 0 uncaught error dari 10.000 program per level (total 30.000 program) | 0 error tidak tertangani, deterministik 100%, waktu < 200ms per program | **PASS** |
 | **UI Monkey Testing** | 0 stuck state / frozen page / console error pada Chromium, Firefox, WebKit | 0 stuck state, tombol & workspace selalu responsif di semua browser | **PASS** |
 | **Failure Injection** | Seluruh skenario kegagalan degradasi secara anggun (*graceful degradation*) | 8/8 skenario menampilkan pesan edukatif atau pulih otomatis | **PASS** |
-| **Suite node --test** | 100% hijau (*zero skipped, zero failed*) | **77 lulus**, 0 gagal, 0 terlewati (durasi ~235s) | **PASS** |
+| **Suite node --test** | 100% hijau (*zero skipped, zero failed*) | **78 lulus**, 0 gagal, 0 terlewati (durasi ~235s) | **PASS** |
 | **Stabilitas Memori (Soak)** | Pertumbuhan heap < 35 MB setelah 500 eksekusi simulasi berturut-turut | Heap awal 3.38 MB, heap akhir 9.94 MB (**delta: +6.56 MB**) | **PASS** |
 
 ---
@@ -115,4 +115,20 @@ Pengujian ketahanan (*hardening & stress testing*) dilakukan secara otomatis dan
 ---
 
 ## 5. Kesimpulan Kesiapan Uji Coba Lapangan
-Berdasarkan hasil pengujian stres dan ketahanan di atas, aplikasi **BitBot Escape v0.3.1** telah dinyatakan **STABIL**, **TAHAN BANTING (*hardened*)**, dan **SIAP DIPERGUNAKAN** untuk penelitian dan pengujian pretest/posttest di laboratorium komputer sekolah tanpa risiko kebocoran data, browser freeze, atau kebutuhan hotfix darurat di lapangan.
+Berdasarkan hasil pengujian stres dan ketahanan di atas, aplikasi **BitBot Escape v0.4.0** telah dinyatakan **STABIL**, **TAHAN BANTING (*hardened*)**, dan **SIAP DIPERGUNAKAN** untuk penelitian dan pengujian pretest/posttest di laboratorium komputer sekolah tanpa risiko kebocoran data, browser freeze, atau kebutuhan hotfix darurat di lapangan.
+
+---
+
+## 6. Catatan Rilis v0.4.0 (perubahan sejak laporan ini disusun)
+
+Laporan ini ditulis untuk build 2026.10.14; build 2026.10.23 (v0.4.0) membawa
+perubahan berikut. Semua perubahan diverifikasi ulang dengan suite `node --test`
+(**78 lulus, 0 gagal**).
+
+| Area | Perubahan | Verifikasi |
+|------|-----------|------------|
+| Penyebaran | Game dipindahkan ke root repo (`index.html`, `engine.js`, `lib/`, `sounds/`) agar GitHub Pages disajikan dari `/`; `docs/` menjadi `frontend/` (dokumen riset) | `tests/ui.smoke.test.js` (path aset & tidak ada permintaan eksternal) |
+| Efek suara | 10 berkas WAV lokal (`sounds/`, ±212 KB) + generator `tools/generate-sounds.js`; tidak ada permintaan ke luar jaringan | `tests/engine.test.js` ("efek suara memakai berkas WAV lokal") |
+| Keamanan konfigurasi | `backend/config.php` tidak lagi di-commit (`.gitignore`); hanya `backend/config.sample.php` yang terpantau Git | Pemeriksaan `git ls-files backend/` |
+| Endpoint API | `api/submit.php` & `api/health.php` dipulihkan; path fetch dibuat relatif (`api/submit.php`) agar game bisa diletakkan di subfolder (Laragon/cPanel) | `backend/PANDUAN-LARAGON.md` (langkah 7a) |
+| Ketahanan localStorage | Pembacaan `localStorage` di lapisan SFX dan status telemetry dibungkus `try/catch` | `tests/failure.injection.test.js` (Failure Injection 3) |

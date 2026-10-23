@@ -389,7 +389,7 @@
     <div class="box" id="pybox"><h3>Kode Python hasil terjemahan</h3><div id="pycode"></div></div>
   </div>
 </main>
-<footer id="appFooter">BitBot Escape v0.3.1 (Build 2026.10.14)</footer>
+<footer id="appFooter">BitBot Escape v0.4.0 (Build 2026.10.23)</footer>
 <div id="overlay" role="dialog" aria-modal="true" aria-labelledby="ovTitle" aria-describedby="ovText">
   <div class="card">
   <div class="big" id="ovIcon"></div>
@@ -616,7 +616,7 @@ async function kirimKeServer(r) {
     stars: r.stars || 0,
     duration_ms: Date.now() - (window._bitbotStartTime || Date.now()),
     client_ts: new Date().toISOString(),
-    build_version: '0.3.1',
+    build_version: '0.4.0',
     program_src: btoa(unescape(encodeURIComponent(srcCode))),
     browser_family: browser
   };
@@ -632,7 +632,7 @@ async function kirimKeServer(r) {
   // Coba kirim ke server (hanya bila ada endpoint HTTP).
   if (!TELEMETRI_AKTIF) { updateTelemetryStatus(); return; }
   try {
-    const resp = await fetch('/api/submit.php', {
+    const resp = await fetch('api/submit.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ records: [record] })
@@ -666,7 +666,7 @@ async function retryPendingTelemetry() {
 
     // Kirim semua sekaligus (max 20 per batch)
     const batch = pending.slice(0, 20);
-    const resp = await fetch('/api/submit.php', {
+    const resp = await fetch('api/submit.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ records: batch })

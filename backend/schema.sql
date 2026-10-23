@@ -1,6 +1,10 @@
 -- BitBot Escape — Skema basis data percobaan siswa
 -- Kompatibel: MySQL 5.7+ / MariaDB 10.3+ (cPanel shared hosting)
 -- Charset: utf8mb4 untuk dukungan emoji dan karakter multibahasa
+--
+-- Untuk Laragon/XAMPP (pemetik): gunakan backend/sql/impor-laragon.sql
+-- (file itu sekaligus membuat database "bitbot_escape"). File ini dipakai
+-- untuk hosting cPanel, setelah database dibuat manual di cPanel.
 
 CREATE TABLE IF NOT EXISTS `attempts` (
   `id`              CHAR(36)        NOT NULL COMMENT 'UUID dari client (crypto.randomUUID)',
